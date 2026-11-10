@@ -22,6 +22,7 @@ Enterprise-oriented forensic analysis project by **NextGenAI / KNOVA**. Static m
 | Academy A3 · PE Header Explorer | Prototype | Explain MZ, e_lfanew, PE signature, machine, entry RVA, image base and sections |
 | Academy A4 · PE Entropy Lab | Prototype | Shannon entropy, byte frequencies, section flags and step-by-step formula |
 | Academy A5 · Import Intelligence | Prototype | DLLs, imported functions, API explanations and evidence limitations |
+| Academy A6 · RVA Mapping | Prototype | RVA-to-file-offset calculations, raw versus virtual data, guided PE section mapping |
 | D · Dynamic Lab | Planned | Isolated, instrumented, explicitly approved sample execution |
 | E · Post-Execution | Planned | Multi-source timeline, corroboration, uncertainty, provenance |
 | F · Reporting | Partial | JSON output; formal chain of custody and PDF/DOCX planned |
@@ -119,6 +120,16 @@ python -m hexforge.import_academy_cli sample.exe
 ```
 
 A static import is a *declared dependency*, not an observed API call. APIs such as `VirtualAlloc`, `WriteProcessMemory` or `CreateRemoteThread` also have legitimate uses. Dynamic resolution, delay-load imports and runtime behavior are not covered. The frontend is a learning prototype and must not be treated as a complete forensic parser.
+
+## Academy A6 — RVA & Memory Mapping Lab
+
+**[Open interactive RVA calculator](web/rva-mapping.html)** — enter RVA, VirtualAddress, PointerToRawData, SizeOfRawData and VirtualSize, or load PE section metadata from a local file. The result shows each step and distinguishes mapped, virtual-only and unmapped addresses.
+
+```bash
+python -m hexforge.rva_academy_cli sample.exe --rva 0x1010
+```
+
+Formula (for RVA backed by raw section data): `FileOffset = PointerToRawData + (RVA - VirtualAddress)`. For example, `0x400 + (0x1010 - 0x1000) = 0x410`. This prototype does not model header mapping, loader behavior, ASLR or actual memory execution.
 
 ## Visual identity
 
