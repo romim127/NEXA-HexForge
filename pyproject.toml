@@ -1,0 +1,9 @@
+[project]
+name = "nexa-hexforge"
+version = "0.1.0"
+description = "Read-only binary intelligence and forensic inspection core"
+requires-python = ">=3.10"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
