@@ -1,4 +1,4 @@
-# NEXA HexForge — Architecture v0.3
+# NEXA HexForge — Architecture v0.4 / C1
 
 ## Principles
 - Read-only static inspection; never execute untrusted files in the core.
@@ -10,7 +10,7 @@
 ## Roadmap
 - **A · Binary Inspector:** streaming SHA-256/SHA-512, magic bytes, hex/ASCII preview, entropy. v0.1 implemented; v0.2 adds bounded offset-based HEX/ASCII rows.
 - **B · Executable Structure:** v0.2 initial defensive PE32/PE32+ headers and section table with bounds checks; v0.3 import-directory parser and explainable section indicators; ELF/Mach-O and signatures pending.
-- **C · Windows Artifact Correlator:** Prefetch, Amcache, ShimCache, EVTX, SRUM, MFT and USN, with source-specific interpretation.
+- **C · Windows Artifact Correlator:** C1 normalized Prefetch/Amcache CSV imports, SHA-256 provenance and cautious timelines; direct raw parsers, ShimCache, EVTX, SRUM, MFT and USN pending.
 - **D · Dynamic Analysis:** isolated, disposable, instrumented VM with explicit operator approval; no automatic execution.
 - **E · Post-Execution Reconstruction:** before/after snapshots, process tree, filesystem/registry/network events, confidence and timestamps.
 - **F · Evidence & Reporting:** chain of custody, provenance, timeline, JSON/DOCX/PDF and reproducible case packages.
@@ -35,3 +35,11 @@ CLI: `python -m hexforge path/to/sample.bin --report analysis.json`
 - Import directory parsing is bounded; imports do not prove API execution.
 - High section entropy and writable+executable flags are review indicators, not malware verdicts.
 - CI: `.github/workflows/python-tests.yml` runs synthetic unit tests on Python 3.10, 3.12 and 3.13; check GitHub Actions for actual status.
+
+## C1 evidence contract
+- Accept only bounded UTF-8 CSV exports with `source,artifact_id,file_path,observed_time_utc` columns.
+- Preserve SHA-256 of source CSV and original row index; report a sorted UTC timeline.
+- Prefetch: execution indicator requiring provenance and context; Amcache: presence/inventory reference, not execution proof.
+- `observed_time_utc` is provided by exporter; it is not automatically a process start time.
+- The current C1 module does not parse `.pf`, ESE, registry hives or EVTX directly.
+- Correlation is **not** a forensic conclusion. No `execution_confirmed` state is inferred automatically.
