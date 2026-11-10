@@ -1,0 +1,62 @@
+"""NEXA Registry Monitor: offline triage of exported Sysmon registry events.
+
+This module does not install a collector, monitor live registry access or execute samples.
+"""
+import json
+from pathlib import Path
+
+EVENTS = {12: "registry_object_created_or_deleted", 13: "registry_value_set", 14: "registry_object_renamed"}
+PERSISTENCE_PATHS = (
+    "\\software\\microsoft\\windows\\currentversion\\run",
+    "\\software\\microsoft\\windows\\currentversion\\runonce",
+    "\\system\\currentcontrolset\\services\\",
+    "\\software\\microsoft\\windows nt\\currentversion\\winlogon",
+    "\\software\\microsoft\\windows nt\\currentversion\\image file execution options\\",
+)
+
+def classify_registry_event(event: dict) -> dict:
+    """Classify an already-normalized event, preserving source uncertainty."""
+    if not isinstance(event, dict): raise ValueError("El evento debe ser un objeto JSON.")
+    event_id = event.get("event_id")
+    if type(event_id) is not int or event_id not in EVENTS:
+        raise ValueError("Solo eventos Sysmon 12, 13 y 14.")
+    target = event.get("target_object", "")
+    if not isinstance(target, str) or not target.strip() or len(target) > 8192:
+        raise ValueError("target_object inválido.")
+    normalized = target.replace("/", "\\").casefold()
+    matches = [p for p in PERSISTENCE_PATHS if p in normalized]
+    return {
+        "event_id": event_id,
+        "operation": EVENTS[event_id],
+        "timestamp_utc": event.get("timestamp_utc"),
+        "process_guid": event.get("process_guid"),
+        "image": event.get("image"),
+        "target_object": target,
+        "details": event.get("details"),
+        "possible_persistence_location": bool(matches),
+        "matched_rules": matches,
+        "assessment": "review" if matches else "informational",
+        "persistence_confirmed": False,
+        "execution_confirmed": False,
+        "source": "normalized_sysmon_export",
+        "limitations": [
+            "No se capturan lecturas generales del registro.",
+            "Un evento de escritura no demuestra persistencia efectiva.",
+            "La ausencia de eventos no demuestra ausencia de actividad.",
+            "La configuración de Sysmon y la cobertura de telemetría determinan qué se observa.",
+        ],
+    }
+
+def analyze_export(path: str | Path) -> dict:
+    """Read bounded JSON array of normalized Sysmon records without modifying evidence."""
+    source = Path(path)
+    if source.is_symlink() or not source.is_file() or source.stat().st_size > 8 * 1024 * 1024:
+        raise ValueError("Se requiere archivo JSON regular de hasta 8 MiB.")
+    data = json.loads(source.read_text(encoding="utf-8"))
+    if not isinstance(data, list) or len(data) > 10000:
+        raise ValueError("Se requiere una lista de hasta 10000 eventos.")
+    results = [classify_registry_event(event) for event in data]
+    return {"module": "Registry & Persistence Monitor — offline MVP",
+            "events": results, "count": len(results),
+            "review_count": sum(e["assessment"] == "review" for e in results),
+            "live_monitoring": False, "execution_performed": False}
