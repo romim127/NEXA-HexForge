@@ -29,7 +29,7 @@ def inspect_pe(path: str | Path) -> dict:
             raise ValueError("e_lfanew fuera de límites.")
         f.seek(pe_offset)
         head = f.read(24)
-        if head[:4] != b"PE\\x00\\x00": raise ValueError("Firma PE inválida.")
+        if head[:4] != b"PE\x00\x00": raise ValueError("Firma PE inválida.")
         machine = _u16(head, 4)
         sections_count = _u16(head, 6)
         optional_size = _u16(head, 20)
@@ -57,7 +57,7 @@ def inspect_pe(path: str | Path) -> dict:
         for i in range(sections_count):
             pos = i * 40
             raw = table[pos:pos+40]
-            name = raw[:8].split(b"\\x00", 1)[0].decode("ascii", "replace")
+            name = raw[:8].split(b"\x00", 1)[0].decode("ascii", "replace")
             virtual_size = _u32(raw, 8)
             virtual_address = _u32(raw, 12)
             raw_size = _u32(raw, 16)
