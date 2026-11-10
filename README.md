@@ -20,6 +20,7 @@ Enterprise-oriented forensic analysis project by **NextGenAI / KNOVA**. Static m
 | Academy A1 · Base Converter | Prototype | HEX ⇄ binary, decimal contributions and interactive explanations |
 | Academy A2 · Byte Inspector | Prototype | Local file offsets, clickable bytes, 8-bit weights, ASCII and decimal |
 | Academy A3 · PE Header Explorer | Prototype | Explain MZ, e_lfanew, PE signature, machine, entry RVA, image base and sections |
+| Academy A4 · PE Entropy Lab | Prototype | Shannon entropy, byte frequencies, section flags and step-by-step formula |
 | D · Dynamic Lab | Planned | Isolated, instrumented, explicitly approved sample execution |
 | E · Post-Execution | Planned | Multi-source timeline, corroboration, uncertainty, provenance |
 | F · Reporting | Partial | JSON output; formal chain of custody and PDF/DOCX planned |
@@ -97,6 +98,16 @@ python -m hexforge.pe_academy_cli sample.exe
 ```
 
 The educational explanation distinguishes **RVA from physical file offset** and explicitly avoids inferring execution or maliciousness from static fields. This prototype is not a complete PE validator.
+
+## Academy A4 — PE Sections & Entropy Lab
+
+**[Open the interactive entropy lab](web/entropy-lab.html)** — select a local PE file, inspect its sections and calculate Shannon entropy for up to 1 MiB of section data. The interface explains the contribution of each observed byte and declared R/W/X flags. No uploads or execution.
+
+```bash
+python -m hexforge.entropy_academy_cli sample.exe --section 0
+```
+
+Entropy is expressed in **bits per byte** (0–8). High entropy can be normal for compressed or encrypted data; W+X section flags are review indicators only. **Neither establishes malware or execution.** A section larger than 1 MiB is sampled, not fully measured.
 
 ## Visual identity
 
