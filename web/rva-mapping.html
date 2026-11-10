@@ -1,0 +1,14 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NEXA Hex Academy A6 · RVA Mapping</title><style>
+:root{color-scheme:dark;font-family:Consolas,monospace}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#25285a,#080d1b 75%);color:#edf6ff}main{max-width:940px;margin:auto;padding:20px}header{text-align:center}header img{width:100%;max-width:650px}h1,h2{color:#63e5f0}section{background:#111c31;border:1px solid #30516c;border-radius:16px;padding:20px;margin:18px 0}input,button{font:inherit;background:#0b1629;border:1px solid #497f9d;color:white;border-radius:8px;padding:12px;max-width:100%}button{cursor:pointer}button:focus-visible{outline:2px solid cyan}label{display:block;margin:12px 0}.formula{color:#67f0e6;font-size:1.15rem;overflow-wrap:anywhere}.note{color:#b7c9e2}#status{color:#f7d88b}footer{text-align:center;color:#9fb4ce;padding:20px}
+</style></head><body><main><header><img src="../assets/nexa-hexforge-infinity.svg" alt="NEXA Infinity"><h1>HEX ACADEMY · A6</h1><p>RVA & MEMORY MAPPING LAB</p></header>
+<section><h2>1 · Calculadora guiada</h2><p>Probá con una sección PE hipotética o cargá los encabezados de un archivo local.</p>
+<label>RVA a convertir <input id="rva" value="0x1010"></label>
+<label>VirtualAddress de la sección <input id="va" value="0x1000"></label>
+<label>PointerToRawData <input id="raw" value="0x400"></label>
+<label>SizeOfRawData <input id="size" value="0x200"></label>
+<label>VirtualSize <input id="vsize" value="0x300"></label>
+<button id="calculate">Calcular y explicar</button><p id="status" role="status"></p></section>
+<section><h2>2 · Resultado razonado</h2><p id="result" class="formula"></p><p id="steps"></p><p id="meaning" class="note"></p></section>
+<section><h2>3 · Extraer datos de una sección PE</h2><input type="file" id="file"><button id="load">Leer secciones PE</button><label>Sección <select id="section"></select></label>
+<p class="note">El navegador lee hasta 1 MiB de encabezados. No sube ni ejecuta archivos. La calculadora solo mapea bytes respaldados por secciones; no modela todos los casos del cargador Windows.</p></section>
+<footer>♾️ AI assists. Human verifies. Human decides.</footer></main><script src="rva-mapping.js"></script></body></html>
