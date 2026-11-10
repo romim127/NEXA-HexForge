@@ -1,4 +1,4 @@
-# NEXA HexForge — Architecture v0.4 / C1
+# NEXA HexForge — Architecture v0.5 / C2
 
 ## Principles
 - Read-only static inspection; never execute untrusted files in the core.
@@ -10,7 +10,7 @@
 ## Roadmap
 - **A · Binary Inspector:** streaming SHA-256/SHA-512, magic bytes, hex/ASCII preview, entropy. v0.1 implemented; v0.2 adds bounded offset-based HEX/ASCII rows.
 - **B · Executable Structure:** v0.2 initial defensive PE32/PE32+ headers and section table with bounds checks; v0.3 import-directory parser and explainable section indicators; ELF/Mach-O and signatures pending.
-- **C · Windows Artifact Correlator:** C1 normalized Prefetch/Amcache CSV imports, SHA-256 provenance and cautious timelines; direct raw parsers, ShimCache, EVTX, SRUM, MFT and USN pending.
+- **C · Windows Artifact Correlator:** C1 normalized Prefetch/Amcache CSV imports, SHA-256 provenance and cautious timelines; C2 cross-source timeline and conservative correlation; direct raw parsers, ShimCache, EVTX, SRUM, MFT and USN pending.
 - **D · Dynamic Analysis:** isolated, disposable, instrumented VM with explicit operator approval; no automatic execution.
 - **E · Post-Execution Reconstruction:** before/after snapshots, process tree, filesystem/registry/network events, confidence and timestamps.
 - **F · Evidence & Reporting:** chain of custody, provenance, timeline, JSON/DOCX/PDF and reproducible case packages.
@@ -43,3 +43,11 @@ CLI: `python -m hexforge path/to/sample.bin --report analysis.json`
 - `observed_time_utc` is provided by exporter; it is not automatically a process start time.
 - The current C1 module does not parse `.pf`, ESE, registry hives or EVTX directly.
 - Correlation is **not** a forensic conclusion. No `execution_confirmed` state is inferred automatically.
+
+## C2 forensic timeline contract
+- `python -m hexforge.timeline_cli evidence-export.csv --window 300 --report correlated-timeline.json`
+- UTC ordering and correlations between Prefetch and Amcache based on matching SHA-256 or normalized full path, within a bounded time window.
+- `moderate` and `low` are qualitative labels, not calibrated statistical probabilities.
+- Never set `execution_confirmed` automatically; association is not causal attribution.
+- C2 is a prototype and does not validate the semantic meaning of exporter timestamps.
+- Correlation output is capped to avoid unbounded memory use.
