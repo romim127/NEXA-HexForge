@@ -159,3 +159,8 @@ See [architecture and limitations](docs/ARCHITECTURE.md).
 **THERE IS NO FINAL VERSION. THERE IS ONLY EVOLUTION.**
 
 **♾️ AI assists. Human verifies. Human decides.**
+
+
+## Semantic Hex Inspector (local preview)
+
+Open [`web/semantic-hex.html`](web/semantic-hex.html) in a browser, select a local binary and click **Inspeccionar bytes**. The viewer highlights validated MZ/PE header fields and ZIP signatures and explains each selected byte in hex, binary, decimal and ASCII. It reads at most 1 MiB for PE header validation and displays the first 4096 bytes. It does not upload, execute or modify the selected file. This is an initial educational preview, not yet a complete file-wide annotated editor or malware detector.
