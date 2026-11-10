@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXA HexForge | Investigá antes de abrir</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,Arial,sans-serif}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#25234a,#090e1d 62%);color:#e2e8f0}main{max-width:940px;margin:auto;padding:22px}header{text-align:center;margin:15px auto 30px}header img{width:min(390px,100%);max-height:130px}h1{font-size:clamp(23px,4vw,37px);letter-spacing:.05em;color:#67e8f9;margin:8px 0}h2{font-size:19px;color:#67e8f9}h3{margin:0;font-size:16px}.subtitle,.muted{color:#a9bbd3}.panel{background:#101b30;border:1px solid #344561;border-radius:17px;padding:23px;margin:18px 0;box-shadow:0 12px 28px #0002}.inner{background:#121f36;border:1px solid #2b3e5d;border-radius:12px;padding:17px;margin:13px 0}.intro{display:flex;gap:15px;align-items:center}.intro .symbol{font-size:29px}input[type=file]{max-width:100%;font:inherit;margin:12px 0}button,.linkbutton{font:inherit;background:#164e63;color:#e8fbff;border:1px solid #22d3ee;border-radius:9px;padding:12px 16px;cursor:pointer;text-decoration:none;display:inline-block}button:hover,.linkbutton:hover{background:#155e75}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #fbbf24;outline-offset:3px}.status{color:#fcd34d}.item{display:flex;gap:13px;align-items:flex-start;border-top:1px solid #334155;padding:15px 0}.item:first-child{border-top:0}.item .icon{font-size:22px;min-width:27px}.item p{margin:5px 0 0;color:#cbd5e1;line-height:1.55}.timeline{margin:16px 0 0;padding:0;list-style:none;counter-reset:steps}.timeline li{position:relative;counter-increment:steps;border-left:2px solid #47647f;padding:0 0 23px 26px;margin-left:12px}.timeline li:before{content:counter(steps);position:absolute;left:-15px;top:-3px;background:#164e63;border:1px solid #22d3ee;border-radius:50%;width:26px;height:26px;text-align:center;line-height:26px;color:#cffafe}.timeline li:last-child{border-left-color:transparent}.timeline small{display:block;color:#a9bbd3;line-height:1.6;margin-top:5px}.pill{display:inline-block;background:#2d244d;color:#e9d5ff;border-radius:30px;padding:5px 10px;font-size:12px}.meta{font-family:ui-monospace,Consolas,monospace;font-size:13px;overflow-wrap:anywhere;color:#cbd5e1}.warning{border-left:3px solid #fbbf24;padding-left:13px;color:#fcd34d}.hidden{display:none}a{color:#67e8f9}footer{text-align:center;color:#94a3b8;padding:24px}#facts{margin-top:10px}#facts p{line-height:1.6}code{color:#f9a8d4}@media(max-width:520px){main{padding:12px}.panel{padding:15px}.intro{align-items:flex-start}}
+</style></head><body><main>
+<header><img src="../assets/nexa-hexforge-infinity.svg" alt="NEXA Infinity"><h1>NEXA HEXFORGE</h1><p class="subtitle">Investigá el archivo antes de abrirlo · Comprendé cada evidencia</p><span class="pill">♾️ AI assists. Human verifies. Human decides.</span></header>
+<section class="panel"><div class="intro"><span class="symbol" aria-hidden="true">🔎</span><div><h2>Investigá el archivo antes de abrirlo</h2><p class="muted">Descubrí qué contiene, qué podría hacer y qué señales conviene revisar. El análisis inicial no ejecuta el archivo.</p></div></div>
+<label for="evidence"><strong>Seleccionar archivo local</strong></label><br><input id="evidence" type="file"><br><button id="analyze" type="button">🔍 Analizar archivo</button>
+<p id="status" class="status" role="status">Seleccioná un archivo para comenzar. No se envía a ningún servidor.</p></section>
+<section id="under" class="panel hidden" aria-live="polite"><h2>🔬 TU ARCHIVO BAJO LA LUPA</h2><div class="inner"><h3 id="filename"></h3><p id="metadata" class="meta"></p><div id="facts"></div></div>
+<div class="item"><span class="icon">⚠️</span><div><h3>¿Qué contiene realmente?</h3><p id="identity"></p></div></div>
+<div class="item"><span class="icon">🔍</span><div><h3>¿Qué señales merece la pena revisar?</h3><p id="signals"></p></div></div>
+<div class="item"><span class="icon">📡</span><div><h3>¿Qué pasó cuando lo ejecutaron?</h3><p>Este análisis no puede saberlo por sí solo. Para demostrar ejecución, cambios o conexiones necesitamos registros del equipo o telemetría de un monitor autorizado.</p></div></div>
+<a class="linkbutton" href="semantic-hex.html">Explorar bytes en Semantic Hex Inspector</a>
+</section>
+<section class="panel"><h2>🧭 RECONSTRUCCIÓN FORENSE</h2><p class="muted">Estas son las etapas que investigaría un analista. <strong>No son hechos observados</strong> hasta incorporar evidencias del sistema.</p>
+<ol class="timeline"><li><strong>Descarga o recepción del archivo</strong><small>Origen, ubicación, fechas y metadatos disponibles. La fecha del archivo no demuestra por sí sola cuándo se descargó.</small></li>
+<li><strong>Posible ejecución</strong><small>Prefetch, Amcache, eventos de procesos y otras fuentes, según disponibilidad y limitaciones.</small></li>
+<li><strong>Acciones posteriores</strong><small>Cambios en archivos, registro, procesos y conexiones. Correlacionar fuentes y horarios.</small></li>
+<li><strong>Conclusión verificable</strong><small>Separar observado, inferido, no comprobado y evidencia faltante.</small></li></ol>
+<div class="inner"><h3>📖 ¿Dónde están los logs?</h3><p class="muted">Windows Event Viewer, Defender Operational, Sysmon (si está instalado y configurado), Prefetch, Amcache y artefactos NTFS son fuentes diferentes. Ninguna garantiza por sí sola reconstruir todas las acciones.</p><p class="warning">El monitor en vivo y la importación de registros todavía no están conectados a esta pantalla. Nunca se ejecuta automáticamente el archivo seleccionado.</p></div></section>
+<footer>THERE IS NO FINAL VERSION. THERE IS ONLY EVOLUTION.<br>♾️ NEXA Infinity · Protección de datos y verificación humana</footer>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const fmt=n=>"0x"+n.toString(16).toUpperCase().padStart(2,"0");
+const suffix=name=>{const p=name.lastIndexOf(".");return p<0?"(sin extensión)":name.slice(p).toLowerCase()};
+function kind(b){if(b.length>=2&&b[0]===77&&b[1]===90)return ["PE/MZ","Se detectó una cabecera MZ. Puede corresponder a un ejecutable Windows; la estructura PE completa requiere validación.","Revisar e_lfanew, cabecera PE, secciones e importaciones."];
+if(b.length>=4&&b[0]===0x7f&&b[1]===69&&b[2]===76&&b[3]===70)return ["ELF","Se detectó la firma ELF, habitual en ejecutables y bibliotecas de sistemas tipo Unix.","Revisar arquitectura, encabezados y dependencias."];
+if(b.length>=4&&b[0]===0x50&&b[1]===0x4b&&[[3,4],[5,6],[7,8]].some(x=>b[2]===x[0]&&b[3]===x[1]))return ["ZIP","Se detectó una estructura compatible con ZIP. Una APK también utiliza ZIP como contenedor.","Inspeccionar entradas, rutas y metadatos sin extraer ni ejecutar contenido desconocido."];
+if(b.length>=3&&b[0]===0xff&&b[1]===0xd8&&b[2]===0xff)return ["JPEG","Se detectó una cabecera compatible con JPEG.","La firma inicial no excluye datos anexados ni otros riesgos; validar la estructura completa."];
+if(b.length>=8&&[137,80,78,71,13,10,26,10].every((x,i)=>b[i]===x))return ["PNG","Se detectó una firma PNG.","Validar estructura y chunks; una firma no garantiza seguridad."];
+if(b.length>=4&&[0x25,0x50,0x44,0x46].every((x,i)=>b[i]===x))return ["PDF","Se detectó una cabecera PDF.","Revisar estructura, objetos, acciones y archivos embebidos con un parser seguro."];
+return ["No identificado","No se identificó una firma conocida en los primeros bytes.","No significa que sea seguro o peligroso; requiere un parser adecuado y más contexto."];}
+$("analyze").addEventListener("click",async()=>{const f=$("evidence").files?.[0];if(!f){$("status").textContent="Seleccioná un archivo.";return;}$("status").textContent="Leyendo los primeros bytes localmente…";try{
+const b=new Uint8Array(await f.slice(0,Math.min(f.size,4096)).arrayBuffer());const [type,identity,signals]=kind(b);
+$("filename").textContent=f.name;$("metadata").textContent="Tamaño: "+f.size+" bytes · Extensión: "+suffix(f.name)+" · Firma: "+type;
+$("facts").replaceChildren();const p=document.createElement("p");p.textContent="Primeros bytes: "+Array.from(b.slice(0,16),fmt).join(" ")+(b.length?"":" (archivo vacío)");$("facts").append(p);
+const ext=suffix(f.name),looksImage=[".jpg",".jpeg",".png",".gif",".webp"].includes(ext),isExecutable=type==="PE/MZ"||type==="ELF";
+$("identity").textContent=(looksImage&&isExecutable?"Atención: la extensión sugiere una imagen, pero la cabecera corresponde a un formato ejecutable. ":"")+identity;
+$("signals").textContent=signals+" Esta clasificación es preliminar: no ejecuta código ni emite un veredicto de malware.";
+$("under").classList.remove("hidden");$("status").textContent="Inspección local completada. No se ejecutó ni envió el archivo.";
+}catch(e){$("status").textContent="No se pudo leer el archivo: "+e.message;}}); 
+</script></main></body></html>
