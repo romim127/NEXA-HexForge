@@ -16,6 +16,8 @@ Enterprise-oriented forensic analysis project by **NextGenAI / KNOVA**. Static m
 | B · PE Inspector | Prototype | PE32/PE32+ headers, sections, import directory, review indicators |
 | C1 · Artifact Correlator | Prototype | Normalized Prefetch/Amcache CSV imports, source hashes, cautious timeline |
 | C2 · Forensic Timeline | Prototype | UTC event ordering, cross-source temporal associations, match basis and confidence labels |
+| C3 · Evidence Provenance | Prototype | SHA-256 evidence registration, hash-linked custody events, integrity verification |
+| Academy · Educational Lab | Prototype | HEX ⇄ binary, decimal contributions and interactive explanations |
 | D · Dynamic Lab | Planned | Isolated, instrumented, explicitly approved sample execution |
 | E · Post-Execution | Planned | Multi-source timeline, corroboration, uncertainty, provenance |
 | F · Reporting | Partial | JSON output; formal chain of custody and PDF/DOCX planned |
@@ -51,6 +53,28 @@ python -m hexforge.timeline_cli evidence-export.csv --window 300 --report correl
 ```
 
 **C2 interpretation:** matching path or hash and time proximity indicate an association, never automatic proof of execution. Time fields retain exporter-specific meaning.
+
+## C3 — Evidence provenance and custody
+
+Register a local evidence file without executing it:
+
+```bash
+python -m hexforge.custody_cli register evidence.bin --id CASE-001 --actor "Analyst" --report custody.json
+python -m hexforge.custody_cli verify custody.json evidence.bin
+```
+
+C3 verifies SHA-256 of evidence and a hash-linked event log. **This is tamper-evident only against partial edits**: without external signatures, immutable storage and trusted timestamps, the log is not legally authenticated or resistant to full rewriting. The original evidence is read-only; custody JSON is created as a new file, never overwritten.
+
+## ♾️ NEXA Hex Academy — Educational Calculator
+
+**[Open the interactive educational frontend](web/academy.html)** (download/serve the repository locally to run the page with JavaScript). Supports HEX → binary/decimal and binary → HEX, nibble-by-nibble with place-value contributions.
+
+```bash
+python -m hexforge.academy_cli AF
+python -m hexforge.academy_cli 10101111 --from-base bin
+```
+
+Example: **AF₁₆ = 1010 1111₂ = 10 × 16¹ + 15 × 16⁰ = 175₁₀**.
 
 ## Visual identity
 
