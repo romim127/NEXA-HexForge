@@ -15,6 +15,7 @@ Enterprise-oriented forensic analysis project by **NextGenAI / KNOVA**. Static m
 | A · Binary Inspector | Prototype | SHA-256/512, HEX/ASCII offsets, bounded string extraction, entropy |
 | B · PE Inspector | Prototype | PE32/PE32+ headers, sections, import directory, review indicators |
 | C1 · Artifact Correlator | Prototype | Normalized Prefetch/Amcache CSV imports, source hashes, cautious timeline |
+| C2 · Forensic Timeline | Prototype | UTC event ordering, cross-source temporal associations, match basis and confidence labels |
 | D · Dynamic Lab | Planned | Isolated, instrumented, explicitly approved sample execution |
 | E · Post-Execution | Planned | Multi-source timeline, corroboration, uncertainty, provenance |
 | F · Reporting | Partial | JSON output; formal chain of custody and PDF/DOCX planned |
@@ -42,6 +43,18 @@ python -m hexforge.artifact_cli evidence-export.csv --report artifact-timeline.j
 CSV required columns: `source,artifact_id,file_path,observed_time_utc`. Optional: `sha256,note,source_file,event_type`. Sources: `prefetch`, `amcache`. Timestamps must include UTC timezone, e.g. `2026-11-10T12:00:00Z`.
 
 **Important:** C1 does not parse raw `.pf` files or raw Amcache hives. It processes a structured CSV produced by another tool. Prefetch is an execution *indicator*, not unconditional proof; Amcache file references alone do not prove execution. Timestamp meaning depends on the original exporter.
+
+C2 cross-source timeline:
+
+```bash
+python -m hexforge.timeline_cli evidence-export.csv --window 300 --report correlated-timeline.json
+```
+
+**C2 interpretation:** matching path or hash and time proximity indicate an association, never automatic proof of execution. Time fields retain exporter-specific meaning.
+
+## Visual identity
+
+The Infinity SVG above is the repository's current vector brand asset. The detailed neon-cyan/violet concept artwork is the reference for the future frontend; implementation will use dark panels, readable monospace typography and separate static/dynamic/evidence views.
 
 ## Tests
 
