@@ -6,11 +6,11 @@ from hexforge.core import identify, inspect_file, write_report
 
 class CoreTests(unittest.TestCase):
     def test_magic(self):
-        self.assertEqual(identify(b"\\x7fELFhello"), "ELF")
+        self.assertEqual(identify(b"\x7fELFhello"), "ELF")
         self.assertEqual(identify(b"MZhello"), "PE candidate (MZ)")
     def test_known_hash_and_read_only(self):
         with tempfile.TemporaryDirectory() as d:
-            p=Path(d)/"sample.bin"; data=b"ABC\\x00ABC"
+            p=Path(d)/"sample.bin"; data=b"ABC\x00ABC"
             p.write_bytes(data)
             before=p.stat().st_mtime_ns
             result=inspect_file(p)
