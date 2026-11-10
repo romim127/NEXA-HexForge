@@ -11,10 +11,10 @@ CHUNK = 1024 * 1024
 
 def identify(header: bytes) -> str:
     if header.startswith(b"MZ"): return "PE candidate (MZ)"
-    if header.startswith(b"\\x7fELF"): return "ELF"
-    if header.startswith(b"PK\\x03\\x04"): return "ZIP container"
+    if header.startswith(b"\x7fELF"): return "ELF"
+    if header.startswith(b"PK\x03\x04"): return "ZIP container"
     if header.startswith(b"%PDF-"): return "PDF"
-    if header.startswith(b"\\xca\\xfe\\xba\\xbe"): return "Mach-O universal / Java class candidate"
+    if header.startswith(b"\xca\xfe\xba\xbe"): return "Mach-O universal / Java class candidate"
     return "Unknown"
 
 def entropy(counts: Counter, size: int) -> float:
@@ -55,4 +55,4 @@ def write_report(report: dict, destination: str | Path) -> None:
     target = Path(destination)
     with target.open("x", encoding="utf-8") as out:
         json.dump(report, out, indent=2, ensure_ascii=False)
-        out.write("\\n")
+        out.write("\n")
