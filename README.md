@@ -19,6 +19,7 @@ Enterprise-oriented forensic analysis project by **NextGenAI / KNOVA**. Static m
 | C3 · Evidence Provenance | Prototype | SHA-256 evidence registration, hash-linked custody events, integrity verification |
 | Academy A1 · Base Converter | Prototype | HEX ⇄ binary, decimal contributions and interactive explanations |
 | Academy A2 · Byte Inspector | Prototype | Local file offsets, clickable bytes, 8-bit weights, ASCII and decimal |
+| Academy A3 · PE Header Explorer | Prototype | Explain MZ, e_lfanew, PE signature, machine, entry RVA, image base and sections |
 | D · Dynamic Lab | Planned | Isolated, instrumented, explicitly approved sample execution |
 | E · Post-Execution | Planned | Multi-source timeline, corroboration, uncertainty, provenance |
 | F · Reporting | Partial | JSON output; formal chain of custody and PDF/DOCX planned |
@@ -86,6 +87,16 @@ python -m hexforge.byte_academy_cli sample.bin --offset 0x0
 ```
 
 For example, `4D` = `01001101` = `64 + 8 + 4 + 1` = `77` = ASCII `M`. The inspector is educational and does not establish maliciousness or execution.
+
+## Academy A3 — PE Header Explorer
+
+**[Open PE Header Explorer](web/pe-explorer.html)** — browser-only, local-file PE32/PE32+ structural learning: DOS MZ, `e_lfanew`, `PE\\0\\0`, machine, entry RVA, image base, and sections. A bounded 1 MiB header read; no binary execution or upload.
+
+```bash
+python -m hexforge.pe_academy_cli sample.exe
+```
+
+The educational explanation distinguishes **RVA from physical file offset** and explicitly avoids inferring execution or maliciousness from static fields. This prototype is not a complete PE validator.
 
 ## Visual identity
 
