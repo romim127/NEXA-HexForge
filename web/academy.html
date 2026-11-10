@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXA Hex Academy · KNOVA</title>
+<style>
+:root{color-scheme:dark;font-family:ui-monospace,Consolas,monospace}*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 50% 0%,#18234c,#070d1b 70%);color:#e8f4ff;min-height:100vh}
+main{max-width:920px;margin:auto;padding:24px}header{text-align:center;padding:25px 0}
+header img{max-width:100%;width:640px}h1{font-size:clamp(1.5rem,4vw,2.6rem);margin:16px 0;color:#57e9ff}
+small,.muted{color:#aabbd4}section{border:1px solid #254365;border-radius:16px;padding:24px;background:#0d1729e8;margin:20px 0}
+label{display:block;margin:12px 0}input,select,button{background:#081122;border:1px solid #4081a0;color:white;border-radius:9px;padding:12px;font:inherit}
+input{width:100%;font-size:1.2rem}button{cursor:pointer;background:linear-gradient(90deg,#075a80,#4b237e);font-weight:700}
+.controls{display:flex;gap:12px;flex-wrap:wrap}.controls>*{flex:1;min-width:130px}
+.result{overflow-wrap:anywhere;color:#5af4e8;font-size:1.2rem}table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid #243e5a;text-align:left}
+th{color:#68e6f7}#error{color:#ffb6bf}code{color:#83eaff}footer{text-align:center;color:#9eafd0;padding:20px}
+</style></head>
+<body><main><header><img src="../assets/nexa-hexforge-infinity.svg" alt="NEXA Infinity"><h1>HEX ACADEMY</h1><p class="muted">Aprendé el cálculo. Verificá cada bit. ♾️</p></header>
+<section><h2>Calculadora explicada</h2><div class="controls"><label>Conversión<select id="mode"><option value="hex">Hexadecimal → binario y decimal</option><option value="bin">Binario → hexadecimal</option></select></label></div>
+<label for="value">Valor de entrada</label><input id="value" value="AF" maxlength="80" spellcheck="false" autocomplete="off">
+<p class="muted">Máximo: 16 dígitos HEX o 64 bits. Los espacios se ignoran.</p><button id="calculate">Calcular y explicar</button><p id="error" role="alert"></p></section>
+<section id="output" aria-live="polite"><h2>Resultado</h2><p class="result" id="result"></p><p id="summary"></p>
+<div style="overflow-x:auto"><table><thead id="head"></thead><tbody id="steps"></tbody></table></div>
+<p id="formula" class="muted"></p></section>
+<footer>THERE IS NO FINAL VERSION. THERE IS ONLY EVOLUTION.<p>AI assists. Human verifies. Human decides.</p></footer></main>
+<script src="academy.js"></script></body></html>
