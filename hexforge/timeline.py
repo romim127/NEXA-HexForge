@@ -7,6 +7,7 @@ import json
 
 SUPPORTED = {"prefetch", "amcache"}
 MAX_EVENTS = 100000
+MAX_CORRELATIONS = 10000
 
 def _time(value: str) -> datetime:
     if not isinstance(value, str) or not value.endswith("Z"):
@@ -54,6 +55,8 @@ def correlate(export: dict, window_seconds: int = 300) -> dict:
                 if delta > window_seconds: break
                 if event["source"] == later["source"]: continue
                 match_type = key[0]
+                if len(correlations) >= MAX_CORRELATIONS:
+                    raise ValueError("Demasiadas correlaciones; reduzca la ventana temporal o filtre eventos.")
                 correlations.append({
                     "left_row": event.get("raw_row_number", index+1),
                     "right_row": later.get("raw_row_number", later_index+1),
