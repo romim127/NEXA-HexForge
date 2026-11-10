@@ -17,6 +17,7 @@ Enterprise-oriented forensic analysis project by **NextGenAI / KNOVA**. Static m
 | C1 · Artifact Correlator | Prototype | Normalized Prefetch/Amcache CSV imports, source hashes, cautious timeline |
 | C2 · Forensic Timeline | Prototype | UTC event ordering, cross-source temporal associations, match basis and confidence labels |
 | C3 · Evidence Provenance | Prototype | SHA-256 evidence registration, hash-linked custody events, integrity verification |
+| Registry Monitor · Offline MVP | Prototype | Classifies normalized Sysmon registry events 12/13/14 and possible persistence locations; live capture planned |
 | Academy A1 · Base Converter | Prototype | HEX ⇄ binary, decimal contributions and interactive explanations |
 | Academy A2 · Byte Inspector | Prototype | Local file offsets, clickable bytes, 8-bit weights, ASCII and decimal |
 | Academy A3 · PE Header Explorer | Prototype | Explain MZ, e_lfanew, PE signature, machine, entry RVA, image base and sections |
@@ -130,6 +131,16 @@ python -m hexforge.rva_academy_cli sample.exe --rva 0x1010
 ```
 
 Formula (for RVA backed by raw section data): `FileOffset = PointerToRawData + (RVA - VirtualAddress)`. For example, `0x400 + (0x1010 - 0x1000) = 0x410`. This prototype does not model header mapping, loader behavior, ASLR or actual memory execution.
+
+## Registry & Persistence Monitor — offline MVP
+
+This initial component classifies **already normalized Sysmon JSON exports** for registry events 12/13/14. It is **not** a live monitor and does not record general registry reads. Path matches trigger contextual review, never a persistence or malware verdict.
+
+```bash
+python -m hexforge.registry_monitor_cli normalized-sysmon.json
+```
+
+See [Registry Monitor architecture and export contract](docs/REGISTRY_MONITOR_ARCHITECTURE.md). The future Windows collector, raw EVTX ingestion, event provenance, cross-source correlation and controlled telemetry coverage are not yet implemented.
 
 ## Visual identity
 
