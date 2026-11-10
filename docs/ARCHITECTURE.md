@@ -1,4 +1,4 @@
-# NEXA HexForge — Architecture v0.5 / C2
+# NEXA HexForge — Architecture v0.6 / C3 + Academy
 
 ## Principles
 - Read-only static inspection; never execute untrusted files in the core.
@@ -13,7 +13,7 @@
 - **C · Windows Artifact Correlator:** C1 normalized Prefetch/Amcache CSV imports, SHA-256 provenance and cautious timelines; C2 cross-source timeline and conservative correlation; direct raw parsers, ShimCache, EVTX, SRUM, MFT and USN pending.
 - **D · Dynamic Analysis:** isolated, disposable, instrumented VM with explicit operator approval; no automatic execution.
 - **E · Post-Execution Reconstruction:** before/after snapshots, process tree, filesystem/registry/network events, confidence and timestamps.
-- **F · Evidence & Reporting:** chain of custody, provenance, timeline, JSON/DOCX/PDF and reproducible case packages.
+- **F · Evidence & Reporting:** C3 prototype hash-linked custody and evidence SHA-256, JSON; signatures, immutable storage, DOCX/PDF and case packages pending.
 
 ## Threat model
 Samples are untrusted inputs. Parser limits, input validation, no network access and resource limits are mandatory before handling adversarial corpora. Static results never establish execution or maliciousness by themselves.
@@ -51,3 +51,16 @@ CLI: `python -m hexforge path/to/sample.bin --report analysis.json`
 - Never set `execution_confirmed` automatically; association is not causal attribution.
 - C2 is a prototype and does not validate the semantic meaning of exporter timestamps.
 - Correlation output is capped to avoid unbounded memory use.
+
+## C3 custody and integrity
+- SHA-256 of the original file; UTC registration, responsible actor, event type and description.
+- Events link by previous event hash; verification detects partial tampering and checks evidence bytes against original hash.
+- This is **not** a cryptographic signature, independently trusted timestamp, secure identity verification, or immutable audit log. A malicious actor able to rewrite the full JSON can recompute all hashes.
+- A stronger enterprise design will need signed append-only events, access control, secure clock and WORM/object-lock storage.
+
+## Educational module — NEXA Hex Academy
+- Standalone frontend: `web/academy.html` and `web/academy.js`; no remote APIs or binary execution.
+- Python reference implementation: `hexforge/academy.py`.
+- Hex → binary and decimal uses exactly 4 bits per hex digit and base-16 positional weights.
+- Binary → hex groups bits from right to left in nibbles and zero-pads on the left.
+- Limit 16 hex digits / 64 binary bits; explain each step as in NEXA SubnetLab.
