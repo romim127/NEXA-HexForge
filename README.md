@@ -17,7 +17,8 @@ Enterprise-oriented forensic analysis project by **NextGenAI / KNOVA**. Static m
 | C1 · Artifact Correlator | Prototype | Normalized Prefetch/Amcache CSV imports, source hashes, cautious timeline |
 | C2 · Forensic Timeline | Prototype | UTC event ordering, cross-source temporal associations, match basis and confidence labels |
 | C3 · Evidence Provenance | Prototype | SHA-256 evidence registration, hash-linked custody events, integrity verification |
-| Academy · Educational Lab | Prototype | HEX ⇄ binary, decimal contributions and interactive explanations |
+| Academy A1 · Base Converter | Prototype | HEX ⇄ binary, decimal contributions and interactive explanations |
+| Academy A2 · Byte Inspector | Prototype | Local file offsets, clickable bytes, 8-bit weights, ASCII and decimal |
 | D · Dynamic Lab | Planned | Isolated, instrumented, explicitly approved sample execution |
 | E · Post-Execution | Planned | Multi-source timeline, corroboration, uncertainty, provenance |
 | F · Reporting | Partial | JSON output; formal chain of custody and PDF/DOCX planned |
@@ -75,6 +76,16 @@ python -m hexforge.academy_cli 10101111 --from-base bin
 ```
 
 Example: **AF₁₆ = 1010 1111₂ = 10 × 16¹ + 15 × 16⁰ = 175₁₀**.
+
+## Academy A2 — Byte Inspector
+
+**[Open Byte Inspector](web/byte-inspector.html)** — select a local file and an offset, read up to 32 bytes in-browser, then click any byte to inspect its HEX, binary weights, decimal and printable ASCII. The browser reads only a small local slice and does not upload or execute samples.
+
+```bash
+python -m hexforge.byte_academy_cli sample.bin --offset 0x0
+```
+
+For example, `4D` = `01001101` = `64 + 8 + 4 + 1` = `77` = ASCII `M`. The inspector is educational and does not establish maliciousness or execution.
 
 ## Visual identity
 
