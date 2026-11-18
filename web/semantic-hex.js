@@ -20,7 +20,15 @@ function fieldExplanation(index,info){
   if(info.kind==="section")return common+"Significado: nombre o descriptor de una sección PE.\nVerificación: revisar RVA, tamaños, permisos y contenido de la sección.";
   if(info.kind==="import")return common+"Significado: campo del directorio de importaciones o cadena DLL/API.\nVerificación: correlacionar imports con telemetría; una importación no prueba ejecución.";
   if(info.kind==="string")return common+"Significado: cadena ASCII imprimible localizada en el archivo.\nVerificación: comprobar contexto, offset y referencias; no implica uso en ejecución.";
-  if(info.kind==="entropy")return common+"Significado: bytes de una sección con entropía elevada en la muestra.\nVerificación: descartar compresión o cifrado legítimos; la entropía no demuestra malware.";\n  return common+"Verificación: contrastar estructura con documentación del formato.";
+  if (info.kind === "entropy") {
+    return common +
+        "Significado: bytes de una sección con entropía elevada en la muestra.\n" +
+        "Verificación: descartar compresión o cifrado legítimos; " +
+        "la entropía no demuestra malware.";
+  }
+
+  return common +
+      "Verificación: contrastar estructura con documentación del formato.";
 }
 function detail(index){
   const value=preview[index],info=labels.get(index),bits=value.toString(2).padStart(8,"0");
