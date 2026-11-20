@@ -146,6 +146,42 @@ See [Registry Monitor architecture and export contract](docs/REGISTRY_MONITOR_AR
 
 The Infinity SVG above is the repository's current vector brand asset. The detailed neon-cyan/violet concept artwork is the reference for the future frontend; implementation will use dark panels, readable monospace typography and separate static/dynamic/evidence views.
 
+
+## HF-SEC-001 — Verified scope and residual risk
+
+**String extraction:** ASCII and printable UTF-16LE are scanned as continuous
+runs across chunk boundaries, including both UTF-16LE byte alignments. Each
+maximal run is reported once at its first byte offset. The displayed value is
+capped at 4096 source bytes (2048 UTF-16LE characters), with `truncated=true`
+when the actual run exceeds the cap. This is not a general Unicode decoder.
+
+**Registry context:** Classification recognizes supported HKLM/HKCU/HKU
+persistence paths and native Sysmon registry paths. Hive context matters:
+a Services key under HKCU is not automatically classified as an HKLM service.
+A relative `SOFTWARE\\...` or `SYSTEM\\...` path is **assumed HKLM** for
+backward compatibility; the output records `registry_root_assumed=true`.
+A matched key is only a location for review, not evidence of execution,
+successful persistence, or malicious intent.
+
+**Secure opening:** On Unix, `O_NOFOLLOW` and comparison of descriptor
+identity (`st_dev`, `st_ino`) mitigate pathname replacement attacks.
+Replacing a pathname after `open()` does not redirect the already-open
+descriptor. Concurrent writes to that inode can still change the content
+during reading. Size/mtime checks do not prove immutability. Windows path
+reparse points and file identity require platform-specific hardening.
+
+**Report privacy:** `report_mode="shareable"` removes `source_path` only.
+The hex/ASCII preview may contain credentials, personal data or other
+sensitive evidence bytes; SHA hashes can enable cross-dataset correlation.
+`write_report()` writes arbitrary supplied dictionaries unchanged and does
+not sanitize them. **Shareable is not anonymous**. Review or redact previews
+and other fields before distributing reports; keep the original forensic
+report protected and access-controlled.
+
+**Verification:** Check the latest PR #3 GitHub Actions run and the
+adversarial regressions in `tests/test_security_followup.py` before merge.
+Passing unit tests does not certify evidence integrity or forensic admissibility.
+
 ## Tests
 
 ```bash
