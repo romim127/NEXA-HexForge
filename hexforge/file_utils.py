@@ -4,11 +4,19 @@ This module provides secure file opening mechanisms that mitigate TOCTOU race co
 and prevent symlink-based attacks. File validation is performed both before and after
 opening to establish chain of custody for forensic analysis.
 
-Limitations by platform:
-- Linux/Unix: O_NOFOLLOW available via os.open(); fstat validation confirms file type
-- Windows: No native O_NOFOLLOW equivalent; os.stat() used for pre-check, fstat() post-check
-- Both platforms: Race conditions between open() and fstat() remain possible but are
-  minimized by validating the descriptor immediately after opening
+Security guarantees by platform:
+- Linux/Unix: st_dev + st_ino uniquely identify inodes; O_NOFOLLOW prevents symlink traversal.
+  TOCTOU window exists between stat() and open(), but fstat() validation immediately after
+  open() confirms the file descriptor points to the same inode.
+- Windows: No inode concept; file identity validated via size and modification time.
+  O_NOFOLLOW equivalent not available. Race conditions remain more likely.
+- Both platforms: For multi-read scenarios, reuse the same descriptor to avoid re-opening.
+
+Limitations:
+- Files can be replaced after open() but before first read() (small window)
+- Symlink targets on network paths may not be detected on all systems
+- Windows alternate data streams and junctions are not checked
+- File permissions verified at open time; subsequent operations may fail
 """
 from __future__ import annotations
 import os
@@ -29,14 +37,13 @@ def secure_open_file(
     2. The path points to a regular file (not a symlink, device, pipe, etc.)
     3. The file size is within acceptable limits
     4. The file is opened without following symlinks (where supported)
-    5. The descriptor points to a regular file (post-open validation)
+    5. Post-open validation confirms the file identity (inode on Unix, size on Windows)
 
     Security considerations:
-    - On Linux/Unix: Uses O_NOFOLLOW flag to prevent symlink traversal
-    - On Windows: Relies on os.stat() checks; O_NOFOLLOW not available
-    - Race conditions: Minimized but not eliminated; fstat() immediately after open()
-      confirms the opened file matches pre-open checks
-    - For multi-read scenarios: Reuse the same descriptor to maintain consistency
+    - On Linux/Unix: Uses O_NOFOLLOW flag; validates st_dev+st_ino identity pre/post-open
+    - On Windows: Relies on os.stat() checks; O_NOFOLLOW not available; validates size consistency
+    - Race conditions: Minimized by immediate fstat() validation; small TOCTOU window remains
+    - For multi-read scenarios: Reuse the same descriptor to maintain file identity
 
     Args:
         path: File path (str or Path)
@@ -49,7 +56,7 @@ def secure_open_file(
     Raises:
         FileNotFoundError: Path does not exist
         IsADirectoryError: Path points to a directory
-        ValueError: Path is a symlink, not a regular file, exceeds max_size, or other validation error
+        ValueError: Path is a symlink, not a regular file, exceeds max_size, identity mismatch
         OSError: System-level file operation failures
     """
     source = Path(path)
@@ -74,6 +81,9 @@ def secure_open_file(
 
     file_stat = source.stat()
     file_size = file_stat.st_size
+    file_dev = file_stat.st_dev if hasattr(file_stat, 'st_dev') else None
+    file_ino = file_stat.st_ino if hasattr(file_stat, 'st_ino') else None
+    file_mtime = file_stat.st_mtime
 
     if max_size is not None and file_size > max_size:
         raise ValueError(
@@ -92,6 +102,7 @@ def secure_open_file(
 
     try:
         stat_result = os.fstat(fd)
+
         if not stat.S_ISREG(stat_result.st_mode):
             raise ValueError(
                 f"Post-open validation failed ({purpose}): {source} is not a regular file. "
@@ -102,6 +113,28 @@ def secure_open_file(
             raise ValueError(
                 f"File size changed ({purpose}): {source} was {file_size} bytes, "
                 f"now {stat_result.st_size} bytes. File may have been modified."
+            )
+
+        # Unix-like: validate inode identity
+        if file_dev is not None and file_ino is not None:
+            post_dev = stat_result.st_dev if hasattr(stat_result, 'st_dev') else None
+            post_ino = stat_result.st_ino if hasattr(stat_result, 'st_ino') else None
+            if post_dev is not None and post_ino is not None:
+                if file_dev != post_dev or file_ino != post_ino:
+                    raise ValueError(
+                        f"Inode identity mismatch ({purpose}): {source} "
+                        f"was inode {file_ino} on device {file_dev}, "
+                        f"now inode {post_ino} on device {post_dev}. "
+                        "File was replaced (TOCTOU race condition)."
+                    )
+
+        # Windows: validate modification time consistency
+        post_mtime = stat_result.st_mtime
+        if abs(post_mtime - file_mtime) > 0.1:
+            raise ValueError(
+                f"File modification time changed ({purpose}): {source} "
+                f"mtime was {file_mtime}, now {post_mtime}. "
+                "File may have been modified."
             )
 
         return os.fdopen(fd, 'rb', closefd=True)

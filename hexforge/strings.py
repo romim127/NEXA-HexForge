@@ -20,51 +20,45 @@ def extract_strings(path: str | Path, min_length: int = 5, max_results: int = 20
     wide_re = re.compile(rb"(?:[\x20-\x7e]\x00){%d,}" % min_length)
 
     results = []
+    seen_offsets = set()  # Track (offset, encoding) to prevent duplicate reporting
     overlap = MAX_STRING_BYTES + 2
-    seen_strings = set()  # Track seen (offset, encoding, value) to prevent duplicates
 
     with f:
         offset = 0
         tail = b""
-        eof = False
 
-        while not eof:
+        while True:
             block = f.read(CHUNK)
-            eof = len(block) < CHUNK
-
             if not block:
                 break
 
             # Combine tail from previous block with current block
             data = tail + block
             base = offset - len(tail)
-
-            # For non-last blocks, only process up to safe_end to avoid duplicates
-            safe_end = len(data) if eof else max(0, len(data) - overlap)
+            is_last_block = len(block) < CHUNK
 
             for kind, regex, codec in (("ASCII", ascii_re, "ascii"), ("UTF-16LE", wide_re, "utf-16le")):
                 for match in regex.finditer(data):
-                    # Skip matches beyond safe_end (will be re-scanned in next block)
-                    if not eof and match.start() >= safe_end:
+                    match_offset = base + match.start()
+                    match_key = (match_offset, kind)
+
+                    # Skip if already reported from previous chunk
+                    if match_key in seen_offsets:
                         continue
 
                     if len(results) >= max_results:
                         break
 
                     raw = match.group()[:MAX_STRING_BYTES]
-                    str_offset = base + match.start()
                     decoded = raw.decode(codec, "replace")
 
-                    # Create unique key to prevent duplicates
-                    key = (str_offset, kind, decoded)
-                    if key not in seen_strings:
-                        seen_strings.add(key)
-                        results.append({
-                            "offset": str_offset,
-                            "encoding": kind,
-                            "value": decoded,
-                            "truncated": len(match.group()) > MAX_STRING_BYTES
-                        })
+                    seen_offsets.add(match_key)
+                    results.append({
+                        "offset": match_offset,
+                        "encoding": kind,
+                        "value": decoded,
+                        "truncated": len(match.group()) > MAX_STRING_BYTES
+                    })
 
                 if len(results) >= max_results:
                     break
@@ -72,8 +66,14 @@ def extract_strings(path: str | Path, min_length: int = 5, max_results: int = 20
             if len(results) >= max_results:
                 break
 
-            # For next iteration: keep the overlap region for boundary matching
-            tail = data[-overlap:] if len(data) > overlap else data
+            # Keep overlap region for next iteration
+            if is_last_block:
+                # Last block: no need to keep tail
+                tail = b""
+            else:
+                # Keep the last 'overlap' bytes for boundary detection
+                tail = data[-overlap:] if len(data) > overlap else data
+
             offset += len(block)
 
     results.sort(key=lambda x: (x["offset"], x["encoding"]))
