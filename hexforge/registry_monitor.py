@@ -4,15 +4,34 @@ This module does not install a collector, monitor live registry access or execut
 """
 import json
 from pathlib import Path
+from .file_utils import validate_file_path
 
 EVENTS = {12: "registry_object_created_or_deleted", 13: "registry_value_set", 14: "registry_object_renamed"}
-PERSISTENCE_PATHS = (
-    "\\software\\microsoft\\windows\\currentversion\\run",
-    "\\software\\microsoft\\windows\\currentversion\\runonce",
-    "\\system\\currentcontrolset\\services\\",
-    "\\software\\microsoft\\windows nt\\currentversion\\winlogon",
-    "\\software\\microsoft\\windows nt\\currentversion\\image file execution options\\",
-)
+
+# Persistence paths defined as component sequences to avoid substring false positives
+PERSISTENCE_PATHS = {
+    "run": ["software", "microsoft", "windows", "currentversion", "run"],
+    "runonce": ["software", "microsoft", "windows", "currentversion", "runonce"],
+    "services": ["system", "currentcontrolset", "services"],
+    "winlogon": ["software", "microsoft", "windows nt", "currentversion", "winlogon"],
+    "ifeo": ["software", "microsoft", "windows nt", "currentversion", "image file execution options"],
+}
+
+def _split_registry_path(path: str) -> list[str]:
+    """Split registry path into normalized components."""
+    # Remove leading/trailing backslashes and normalize
+    normalized = path.strip("\\").replace("/", "\\").casefold()
+    return normalized.split("\\")
+
+def _matches_persistence_pattern(path_components: list[str], pattern_components: list[str]) -> bool:
+    """Check if path components contain pattern sequence (must be consecutive)."""
+    if len(pattern_components) > len(path_components):
+        return False
+    # Look for exact consecutive sequence match
+    for i in range(len(path_components) - len(pattern_components) + 1):
+        if path_components[i:i+len(pattern_components)] == pattern_components:
+            return True
+    return False
 
 def classify_registry_event(event: dict) -> dict:
     """Classify an already-normalized event, preserving source uncertainty."""
@@ -23,8 +42,16 @@ def classify_registry_event(event: dict) -> dict:
     target = event.get("target_object", "")
     if not isinstance(target, str) or not target.strip() or len(target) > 8192:
         raise ValueError("target_object inválido.")
-    normalized = target.replace("/", "\\").casefold()
-    matches = [p for p in PERSISTENCE_PATHS if p in normalized]
+
+    # Split and normalize path
+    path_components = _split_registry_path(target)
+
+    # Check against persistence patterns
+    matches = []
+    for name, pattern in PERSISTENCE_PATHS.items():
+        if _matches_persistence_pattern(path_components, pattern):
+            matches.append(name)
+
     return {
         "event_id": event_id,
         "operation": EVENTS[event_id],
@@ -49,9 +76,7 @@ def classify_registry_event(event: dict) -> dict:
 
 def analyze_export(path: str | Path) -> dict:
     """Read bounded JSON array of normalized Sysmon records without modifying evidence."""
-    source = Path(path)
-    if source.is_symlink() or not source.is_file() or source.stat().st_size > 8 * 1024 * 1024:
-        raise ValueError("Se requiere archivo JSON regular de hasta 8 MiB.")
+    source = validate_file_path(path, must_exist=True, max_size=8 * 1024 * 1024, purpose="registry export")
     data = json.loads(source.read_text(encoding="utf-8"))
     if not isinstance(data, list) or len(data) > 10000:
         raise ValueError("Se requiere una lista de hasta 10000 eventos.")

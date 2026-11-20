@@ -5,6 +5,7 @@ from hashlib import sha256
 from pathlib import Path
 import csv
 import json
+from .file_utils import validate_file_path
 
 SOURCES = {"prefetch", "amcache"}
 MAX_ROWS = 100000
@@ -55,9 +56,7 @@ def normalize(row: dict, index: int) -> dict:
     }
 
 def load_export(path: str | Path) -> dict:
-    p = Path(path)
-    if p.is_symlink() or not p.is_file(): raise ValueError("Se requiere exportación CSV regular.")
-    if p.stat().st_size > MAX_CSV_BYTES: raise ValueError("CSV supera 32 MiB.")
+    p = validate_file_path(path, must_exist=True, max_size=MAX_CSV_BYTES, purpose="CSV export")
     raw = p.read_bytes()
     digest = sha256(raw).hexdigest()
     try:

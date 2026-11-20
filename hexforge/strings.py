@@ -1,6 +1,7 @@
 """Extracción acotada de cadenas ASCII y UTF-16LE; no ejecuta muestras."""
 from pathlib import Path
 import re
+from .file_utils import secure_open_file
 
 CHUNK = 1024 * 1024
 MAX_RESULTS = 1000
@@ -12,32 +13,68 @@ def extract_strings(path: str | Path, min_length: int = 5, max_results: int = 20
     if type(max_results) is not int or not 1 <= max_results <= MAX_RESULTS:
         raise ValueError("max_results debe estar entre 1 y 1000.")
     p = Path(path)
-    if p.is_symlink() or not p.is_file():
-        raise ValueError("Se requiere archivo regular.")
-    # Regex sobre bloques solapados: conserva offsets y evita cargar archivos completos.
+    f = secure_open_file(p, purpose="string extraction")
+
+    # Regex patterns with explicit quantifiers
     ascii_re = re.compile(rb"[\x20-\x7e]{%d,}" % min_length)
     wide_re = re.compile(rb"(?:[\x20-\x7e]\x00){%d,}" % min_length)
+
     results = []
     overlap = MAX_STRING_BYTES + 2
-    with p.open("rb") as f:
+    seen_strings = set()  # Track seen (offset, encoding, value) to prevent duplicates
+
+    with f:
         offset = 0
         tail = b""
-        while True:
+        eof = False
+
+        while not eof:
             block = f.read(CHUNK)
-            if not block: break
+            eof = len(block) < CHUNK
+
+            if not block:
+                break
+
+            # Combine tail from previous block with current block
             data = tail + block
             base = offset - len(tail)
-            safe_end = len(data) if len(block) < CHUNK else max(0, len(data) - overlap)
+
+            # For non-last blocks, only process up to safe_end to avoid duplicates
+            safe_end = len(data) if eof else max(0, len(data) - overlap)
+
             for kind, regex, codec in (("ASCII", ascii_re, "ascii"), ("UTF-16LE", wide_re, "utf-16le")):
                 for match in regex.finditer(data):
-                    if match.start() >= safe_end: continue
-                    if len(results) >= max_results: break
+                    # Skip matches beyond safe_end (will be re-scanned in next block)
+                    if not eof and match.start() >= safe_end:
+                        continue
+
+                    if len(results) >= max_results:
+                        break
+
                     raw = match.group()[:MAX_STRING_BYTES]
-                    results.append({"offset": base + match.start(), "encoding": kind,
-                                    "value": raw.decode(codec, "replace"),
-                                    "truncated": len(match.group()) > MAX_STRING_BYTES})
-            if len(results) >= max_results: break
-            tail = data[-overlap:]
+                    str_offset = base + match.start()
+                    decoded = raw.decode(codec, "replace")
+
+                    # Create unique key to prevent duplicates
+                    key = (str_offset, kind, decoded)
+                    if key not in seen_strings:
+                        seen_strings.add(key)
+                        results.append({
+                            "offset": str_offset,
+                            "encoding": kind,
+                            "value": decoded,
+                            "truncated": len(match.group()) > MAX_STRING_BYTES
+                        })
+
+                if len(results) >= max_results:
+                    break
+
+            if len(results) >= max_results:
+                break
+
+            # For next iteration: keep the overlap region for boundary matching
+            tail = data[-overlap:] if len(data) > overlap else data
             offset += len(block)
+
     results.sort(key=lambda x: (x["offset"], x["encoding"]))
     return results[:max_results]

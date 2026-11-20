@@ -3,6 +3,7 @@ from collections import Counter
 from math import log2
 from pathlib import Path
 from .pe import inspect_pe
+from .file_utils import secure_open_file
 
 MAX_SAMPLE = 1024 * 1024
 
@@ -27,11 +28,11 @@ def inspect_section_entropy(path: str | Path, section_index: int) -> dict:
     if type(section_index) is not int or section_index < 0:
         raise ValueError("Índice de sección inválido.")
     p = Path(path)
-    if p.is_symlink() or not p.is_file(): raise ValueError("Archivo regular requerido.")
     pe = inspect_pe(p)
     if section_index >= len(pe["sections"]): raise ValueError("Sección inexistente.")
     section = pe["sections"][section_index]
-    with p.open("rb") as stream:
+    stream = secure_open_file(p, purpose="entropy inspection")
+    with stream:
         stream.seek(section["raw_offset"])
         sample = stream.read(min(section["raw_size"], MAX_SAMPLE))
     result = explain_entropy(sample)
