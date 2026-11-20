@@ -174,7 +174,7 @@ reparse points and file identity require platform-specific hardening.
 The hex/ASCII preview may contain credentials, personal data or other
 sensitive evidence bytes; SHA hashes can enable cross-dataset correlation.
 `write_report()` writes arbitrary supplied dictionaries unchanged and does
-not sanitize them. **Shareable is not anonymous**. Review or redact previews
+not sanitize them. **Shareable is not anonymous**. For external sharing, prefer `report_mode="redacted"`, which removes `source_path` and both byte previews while retaining hashes (which remain correlatable). Review or redact previews
 and other fields before distributing reports; keep the original forensic
 report protected and access-controlled.
 
