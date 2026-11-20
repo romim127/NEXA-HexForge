@@ -5,6 +5,7 @@ from pathlib import Path
 
 from hexforge.strings import CHUNK, MAX_STRING_BYTES, extract_strings
 from hexforge.registry_monitor import classify_registry_event
+from hexforge.core import inspect_file
 
 
 class StreamingStringRegression(unittest.TestCase):
@@ -74,6 +75,28 @@ class RegistryContextRegression(unittest.TestCase):
         result = classify_registry_event(self.event(
             r"\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\Test"))
         self.assertTrue(result["registry_root_assumed"])
+
+
+class ReportPrivacyRegression(unittest.TestCase):
+    def test_redacted_removes_paths_and_preview(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "sensitive.bin"
+            path.write_bytes(b"password=secret-example")
+            report = inspect_file(path, report_mode="redacted")
+            self.assertNotIn("source_path", report)
+            self.assertEqual(report["hex_preview"], "")
+            self.assertEqual(report["ascii_preview"], "")
+            self.assertEqual(len(report["sha256"]), 64)
+            self.assertEqual(report["report_mode"], "redacted")
+            self.assertIn("correlate", " ".join(report["limitations"]))
+
+    def test_shareable_still_has_explicit_risk_warning(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "sample.bin"
+            path.write_bytes(b"password=secret-example")
+            report = inspect_file(path, report_mode="shareable")
+            self.assertIn("password", report["ascii_preview"])
+            self.assertIn("not anonymization", " ".join(report["limitations"]))
 
 
 if __name__ == "__main__":
