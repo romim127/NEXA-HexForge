@@ -26,7 +26,7 @@ def inspect_file(path: str | Path, preview_bytes: int = 256, report_mode: str = 
     """Inspect file with optional privacy control.
 
     report_mode: "forense" includes absolute source_path for audit trail;
-                 "shareable" excludes absolute path for privacy.
+                 "shareable" removes source_path only; not full anonymization.
     """
     if type(preview_bytes) is not int or not 0 <= preview_bytes <= 4096:
         raise ValueError("preview_bytes debe estar entre 0 y 4096.")
@@ -67,11 +67,20 @@ def inspect_file(path: str | Path, preview_bytes: int = 256, report_mode: str = 
                             "No execution, sandboxing, network requests or Windows artifact collection was performed."]
 
     if report_mode == "shareable":
-        report["limitations"].append("Shareable mode: source path excluded; use forense mode for complete audit trail.")
+        report["limitations"].append(
+            "Shareable mode removes source_path only. File previews can reveal "
+            "sensitive bytes, and hashes can correlate evidence across datasets. "
+            "This is not anonymization; review before external distribution."
+        )
 
     return report
 
 def write_report(report: dict, destination: str | Path) -> None:
+    """Export caller-supplied JSON unchanged; no automatic sanitization.
+
+    Arbitrary dictionaries bypass inspect_file's report_mode filtering.
+    Review all fields before sharing with third parties.
+    """
     target = Path(destination)
     with target.open("x", encoding="utf-8") as out:
         json.dump(report, out, indent=2, ensure_ascii=False)
