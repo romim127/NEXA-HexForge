@@ -66,6 +66,9 @@ def extract_strings(path: str | Path, min_length: int = 5, max_results: int = 20
         item = run.result(min_length)
         if item is not None:
             results.append(item)
+            if len(results) > max_results:
+                results.sort(key=lambda value: (value["offset"], value["encoding"]))
+                results.pop()
 
     with secure_open_file(Path(path), purpose="string extraction") as stream:
         while block := stream.read(CHUNK):
