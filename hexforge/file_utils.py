@@ -6,14 +6,16 @@ opening to establish chain of custody for forensic analysis.
 
 Security guarantees by platform:
 - Linux/Unix: st_dev + st_ino uniquely identify inodes; O_NOFOLLOW prevents symlink traversal.
-  TOCTOU window exists between stat() and open(), but fstat() validation immediately after
-  open() confirms the file descriptor points to the same inode.
-- Windows: No inode concept; file identity validated via size and modification time.
+  A pathname may change between stat() and open(); fstat() validates the
+  opened descriptor against the prior identity. This does not freeze file contents.
+- Windows: Python exposes stat identity fields with platform-specific semantics;
+  size and modification time alone are not reliable file identity proofs.
   O_NOFOLLOW equivalent not available. Race conditions remain more likely.
 - Both platforms: For multi-read scenarios, reuse the same descriptor to avoid re-opening.
 
 Limitations:
-- Files can be replaced after open() but before first read() (small window)
+- Renaming/replacing a pathname after open() does not redirect an existing Unix
+  file descriptor; concurrent writes to the opened inode can still change bytes read.
 - Symlink targets on network paths may not be detected on all systems
 - Windows alternate data streams and junctions are not checked
 - File permissions verified at open time; subsequent operations may fail
@@ -42,7 +44,8 @@ def secure_open_file(
     Security considerations:
     - On Linux/Unix: Uses O_NOFOLLOW flag; validates st_dev+st_ino identity pre/post-open
     - On Windows: Relies on os.stat() checks; O_NOFOLLOW not available; validates size consistency
-    - Race conditions: Minimized by immediate fstat() validation; small TOCTOU window remains
+    - Race conditions: Pathname substitution is checked after open, but content
+      modification during reading is not prevented.
     - For multi-read scenarios: Reuse the same descriptor to maintain file identity
 
     Args:
@@ -128,7 +131,8 @@ def secure_open_file(
                         "File was replaced (TOCTOU race condition)."
                     )
 
-        # Windows: validate modification time consistency
+        # Check modification time as a weak consistency signal on all platforms;
+        # it is not proof of content immutability or identity.
         post_mtime = stat_result.st_mtime
         if abs(post_mtime - file_mtime) > 0.1:
             raise ValueError(
