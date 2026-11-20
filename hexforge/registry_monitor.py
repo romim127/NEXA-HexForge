@@ -41,6 +41,14 @@ def _split_registry_path(path: str) -> tuple[list[str], str]:
     if not components:
         raise ValueError("Empty registry path")
 
+    # Native Sysmon registry paths use \REGISTRY\MACHINE or \REGISTRY\USER\<SID>.
+    if len(components) >= 3 and components[0] == "registry":
+        if components[1] == "machine":
+            return ["hkey_local_machine"] + components[2:], "hkey_local_machine"
+        if components[1] == "user" and len(components) >= 4:
+            return ["hkey_users"] + components[2:], "hkey_users"
+        raise ValueError("Unsupported native registry root")
+
     # Check if first component is a known registry root
     root = components[0].strip()
     if root in REGISTRY_ROOTS:
@@ -110,10 +118,29 @@ def classify_registry_event(event: dict) -> dict:
             ],
         }
 
+    # Classify only locations meaningful for the corresponding hive.
+    canonical_root = {
+        "hklm": "hkey_local_machine", "hkcu": "hkey_current_user",
+        "hkcr": "hkey_classes_root", "hku": "hkey_users",
+        "hkcc": "hkey_current_config",
+    }.get(root_hive, root_hive)
+    allowed = {
+        "hkey_local_machine": {"run", "runonce", "services", "winlogon", "ifeo"},
+        "hkey_current_user": {"run", "runonce"},
+        "hkey_users": {"run", "runonce"},
+    }.get(canonical_root, set())
+    match_components = path_components
+    if canonical_root == "hkey_users":
+        # HKEY_USERS requires a user SID immediately after the hive.
+        if len(path_components) < 3 or not path_components[1].startswith("s-1-"):
+            allowed = set()
+        else:
+            match_components = [path_components[0]] + path_components[2:]
+
     # Check against persistence patterns
     matches = []
     for name, pattern in PERSISTENCE_PATHS.items():
-        if _matches_persistence_pattern(path_components, pattern):
+        if name in allowed and _matches_persistence_pattern(match_components, pattern):
             matches.append(name)
 
     return {
@@ -124,7 +151,8 @@ def classify_registry_event(event: dict) -> dict:
         "image": event.get("image"),
         "target_object": target,
         "details": event.get("details"),
-        "registry_root": root_hive,
+        "registry_root": canonical_root,
+        "registry_root_assumed": target.lstrip("/\\").casefold().startswith(("software\\", "system\\", "software/", "system/")),
         "possible_persistence_location": bool(matches),
         "matched_rules": matches,
         "assessment": "review" if matches else "informational",
