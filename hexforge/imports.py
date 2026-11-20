@@ -2,6 +2,7 @@
 from pathlib import Path
 from struct import unpack_from
 from .pe import inspect_pe
+from .file_utils import secure_open_file
 
 MAX_IMPORT_DESCRIPTORS = 256
 MAX_THUNKS_PER_DLL = 2048
@@ -10,7 +11,8 @@ MAX_NAME = 512
 def inspect_imports(path: str | Path) -> dict:
     pe = inspect_pe(path)
     p = Path(path)
-    with p.open("rb") as f:
+    f = secure_open_file(p, purpose="import inspection")
+    with f:
         f.seek(0, 2)
         file_size = f.tell()
         f.seek(0x3C)

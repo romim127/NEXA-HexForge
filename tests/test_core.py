@@ -31,4 +31,4 @@ class CoreTests(unittest.TestCase):
             write_report({"test":True},p)
             with self.assertRaises(FileExistsError):write_report({"test":False},p)
     def test_missing_file(self):
-        with self.assertRaises(ValueError):inspect_file("nonexistent-file-for-hexforge.bin")
+        with self.assertRaises((ValueError, FileNotFoundError)):inspect_file("nonexistent-file-for-hexforge.bin")

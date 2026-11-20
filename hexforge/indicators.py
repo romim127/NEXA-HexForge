@@ -3,6 +3,7 @@ from pathlib import Path
 from collections import Counter
 from math import log2
 from .pe import inspect_pe
+from .file_utils import secure_open_file
 
 def _entropy(data: bytes) -> float:
     if not data: return 0.0
@@ -13,7 +14,8 @@ def section_indicators(path: str | Path) -> dict:
     pe = inspect_pe(path)
     findings = []
     sections = []
-    with Path(path).open("rb") as f:
+    f = secure_open_file(Path(path), purpose="indicator analysis")
+    with f:
         for s in pe["sections"]:
             if s["raw_size"] > 64 * 1024 * 1024:
                 findings.append({"section": s["name"], "rule": "large_section_skipped",
