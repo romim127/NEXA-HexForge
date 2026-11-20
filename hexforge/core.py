@@ -27,11 +27,12 @@ def inspect_file(path: str | Path, preview_bytes: int = 256, report_mode: str = 
 
     report_mode: "forense" includes absolute source_path for audit trail;
                  "shareable" removes source_path only; not full anonymization.
+                 "redacted" removes source_path and byte previews, but retains hashes.
     """
     if type(preview_bytes) is not int or not 0 <= preview_bytes <= 4096:
         raise ValueError("preview_bytes debe estar entre 0 y 4096.")
-    if report_mode not in ("forense", "shareable"):
-        raise ValueError("report_mode must be 'forense' or 'shareable'.")
+    if report_mode not in ("forense", "shareable", "redacted"):
+        raise ValueError("report_mode must be 'forense', 'shareable' or 'redacted'.")
 
     source = Path(path)
     stream = secure_open_file(source, purpose="file inspection")
@@ -65,6 +66,17 @@ def inspect_file(path: str | Path, preview_bytes: int = 256, report_mode: str = 
     report["limitations"] = ["File signatures are preliminary; MZ alone does not validate a PE structure.",
                             "Entropy is not evidence of maliciousness.",
                             "No execution, sandboxing, network requests or Windows artifact collection was performed."]
+
+    if report_mode == "redacted":
+        # Preserve analytical metadata and hashes; omit all raw-byte previews.
+        # Hashes can still correlate evidence and are not anonymous identifiers.
+        report["hex_preview"] = ""
+        report["ascii_preview"] = ""
+        report["limitations"].append(
+            "Redacted mode omits source_path and raw-byte previews, but SHA hashes "
+            "can still identify or correlate files. Review remaining metadata "
+            "before distribution; this is not guaranteed anonymization."
+        )
 
     if report_mode == "shareable":
         report["limitations"].append(
