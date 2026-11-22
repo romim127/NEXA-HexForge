@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 import json
+from .file_utils import secure_open_file
 
 MAX_FILE = 2 * 1024 * 1024
 MAX_EVENTS = 10000
@@ -14,10 +15,10 @@ def _canonical(value: dict) -> bytes:
 
 def _hash_file(path: str | Path) -> tuple[str, int]:
     p = Path(path)
-    if p.is_symlink() or not p.is_file(): raise ValueError("Se requiere un archivo regular.")
+    stream = secure_open_file(p, max_size=MAX_FILE, purpose="evidence hashing")
     h = sha256()
     size = 0
-    with p.open("rb") as stream:
+    with stream:
         while block := stream.read(1024 * 1024):
             h.update(block)
             size += len(block)

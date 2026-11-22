@@ -1,5 +1,6 @@
 """A2: explicación bit a bit de bytes de archivos; lectura de solo lectura."""
 from pathlib import Path
+from .file_utils import secure_open_file
 
 WEIGHTS = (128, 64, 32, 16, 8, 4, 2, 1)
 
@@ -24,9 +25,8 @@ def inspect_byte(path: str | Path, offset: int = 0) -> dict:
     if type(offset) is not int or offset < 0:
         raise ValueError("Offset inválido.")
     p = Path(path)
-    if p.is_symlink() or not p.is_file():
-        raise ValueError("Se requiere archivo regular.")
-    with p.open("rb") as stream:
+    stream = secure_open_file(p, purpose="byte inspection")
+    with stream:
         stream.seek(offset)
         value = stream.read(1)
     if not value:

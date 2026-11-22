@@ -1,6 +1,7 @@
 """Parser PE mínimo defensivo, sin carga ni ejecución del binario."""
 from pathlib import Path
 from struct import unpack_from
+from .file_utils import secure_open_file
 
 MAX_SECTIONS = 96
 MAX_HEADER = 1024 * 1024
@@ -15,9 +16,8 @@ def _u32(buf, offset):
 
 def inspect_pe(path: str | Path) -> dict:
     source = Path(path)
-    if source.is_symlink() or not source.is_file():
-        raise ValueError("Se requiere un archivo regular.")
-    with source.open("rb") as f:
+    f = secure_open_file(source, purpose="PE inspection")
+    with f:
         f.seek(0, 2)
         size = f.tell()
         if size < 64: raise ValueError("Cabecera DOS incompleta.")

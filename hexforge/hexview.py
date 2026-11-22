@@ -1,5 +1,6 @@
 """Visor hexadecimal con offsets verificables y lectura acotada."""
 from pathlib import Path
+from .file_utils import secure_open_file
 
 def hex_rows(path: str | Path, offset: int = 0, length: int = 256, width: int = 16) -> list[dict]:
     if type(offset) is not int or offset < 0:
@@ -9,9 +10,8 @@ def hex_rows(path: str | Path, offset: int = 0, length: int = 256, width: int = 
     if type(width) is not int or width not in (8, 16, 32):
         raise ValueError("Ancho permitido: 8, 16 o 32 bytes.")
     source = Path(path)
-    if source.is_symlink() or not source.is_file():
-        raise ValueError("Se requiere un archivo regular.")
-    with source.open("rb") as stream:
+    stream = secure_open_file(source, purpose="hex view")
+    with stream:
         stream.seek(offset)
         data = stream.read(length)
     return [
