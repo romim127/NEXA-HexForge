@@ -104,7 +104,7 @@ if "%OPEN_BROWSER%"=="true" (
 )
 
 REM Run uvicorn
-"%UVICORN%" %SERVER_MODULE% --host %HOST% --port %PORT% --log-level warning --no-access-log
+"%PYTHON%" -m hexforge.server_cli --host %HOST% --port %PORT% --no-browser
 
 REM Pause on error
 if %ERRORLEVEL% neq 0 (
