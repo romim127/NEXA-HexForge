@@ -845,6 +845,7 @@ async function handleFileSelect(file) {
 
     const response = await fetch(`${API_BASE}/upload`, {
       method: 'POST',
+      headers: {'X-HexForge-Token': state.sessionToken || ''},
       body: formData,
     });
 
@@ -854,7 +855,7 @@ async function handleFileSelect(file) {
       throw new Error(data.detail || 'Error al subir archivo');
     }
 
-    state.currentFile = data;
+    state.currentFile = {...data, id: data.file_id};
     elements.selectedFileName.textContent = data.filename;
     elements.fileInfo.textContent = `${formatBytes(data.size)} • SHA256: ${data.sha256.substring(0, 16)}...`;
     elements.btnAnalyze.disabled = false;
