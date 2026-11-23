@@ -22,7 +22,6 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-import aiofiles
 
 from hexforge.core import inspect_file, write_report
 from hexforge.hexview import hex_rows
