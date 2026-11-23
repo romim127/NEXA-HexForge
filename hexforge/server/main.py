@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
+import aiofiles
 
 from hexforge.core import inspect_file, write_report
 from hexforge.hexview import hex_rows
@@ -212,18 +213,21 @@ def _get_upload_path(file_id: str) -> Path:
 
 
 def _validate_origin(request: Request) -> None:
-    """Validate Host and Origin headers to prevent CSRF and unauthorized access."""
+    """Validate Host and Origin headers to prevent CSRF and unauthorized access.
+
+    Uses exact matching (not prefix) to prevent subdomain bypasses.
+    """
     host = request.headers.get("host", "")
     origin = request.headers.get("origin", "")
 
-    # Allow only localhost origins
-    allowed_hosts = {f"{DEFAULT_HOST}:{DEFAULT_PORT}", "localhost", "127.0.0.1"}
-    if host and not any(host.startswith(h) for h in allowed_hosts):
+    # Allow only exact localhost origins (no subdomain bypass)
+    allowed_hosts = {f"{DEFAULT_HOST}:{DEFAULT_PORT}", "localhost", "127.0.0.1", f"127.0.0.1:{DEFAULT_PORT}"}
+    if host and host not in allowed_hosts:
         raise HTTPException(status_code=403, detail="Invalid Host header")
 
     if origin:
-        allowed_origins = {f"http://{DEFAULT_HOST}:{DEFAULT_PORT}", "http://localhost", "http://127.0.0.1"}
-        if not any(origin.startswith(o) for o in allowed_origins):
+        allowed_origins = {f"http://{DEFAULT_HOST}:{DEFAULT_PORT}", "http://localhost", "http://127.0.0.1", f"http://127.0.0.1:{DEFAULT_PORT}"}
+        if origin not in allowed_origins:
             raise HTTPException(status_code=403, detail="Invalid Origin header")
 
 
@@ -296,32 +300,61 @@ async def health():
 
 @app.post("/api/upload", response_model=FileUploadResponse)
 async def upload_file(file: UploadFile = File(...)):
-    """Upload a file for analysis. Returns a file_id for subsequent operations."""
+    """Upload a file for analysis. Returns a file_id for subsequent operations.
+
+    Streams file to disk in chunks to bound memory usage.
+    """
     # Validate filename
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
-    # Read file with size limit
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail="File too large (max 100 MiB)")
-
-    # Generate secure file_id (SHA-256 of content)
+    # Generate secure file_id upfront (will be SHA-256 of content)
     from hashlib import sha256
-    file_id = sha256(content).hexdigest()[:32]
-    file_path = UPLOAD_DIR / file_id
+    hasher = sha256()
+    file_path = UPLOAD_DIR / "temp_upload"
+    size = 0
 
-    # Write file
+    # Stream to disk in chunks using aiofiles for async writes
+    CHUNK_SIZE = 1024 * 1024  # 1 MiB
     try:
-        file_path.write_bytes(content)
+        async with aiofiles.open(file_path, 'wb') as f:
+            async for chunk in file.iter_bytes(CHUNK_SIZE):
+                hasher.update(chunk)
+                size += len(chunk)
+                if size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(status_code=413, detail="File too large (max 100 MiB)")
+                await f.write(chunk)
+    except HTTPException:
+        try:
+            file_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
     except Exception as e:
+        try:
+            file_path.unlink(missing_ok=True)
+        except OSError:
+            pass
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+    file_id = hasher.hexdigest()[:32]
+    final_path = UPLOAD_DIR / file_id
+
+    # Atomic rename to final name
+    try:
+        file_path.rename(final_path)
+    except OSError as e:
+        try:
+            file_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise HTTPException(status_code=500, detail=f"Failed to finalize upload: {e}")
 
     return FileUploadResponse(
         file_id=file_id,
         filename=file.filename,
-        size=len(content),
-        sha256=sha256(content).hexdigest(),
+        size=size,
+        sha256=hasher.hexdigest(),
     )
 
 

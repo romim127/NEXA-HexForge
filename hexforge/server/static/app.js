@@ -526,8 +526,69 @@ const moduleHandlers = {
 
   reports: {
     async export() {
-      // This would need the current analysis results - simplified for now
-      showToast('Seleccione un módulo y analice primero', 'warning');
+      if (!state.currentFile) {
+        showToast('No hay archivo cargado', 'warning');
+        return;
+      }
+
+      const mode = document.getElementById('report-mode').value;
+      const destination = document.getElementById('report-destination').value.trim();
+
+      if (!destination) {
+        showToast('Especifique un archivo de destino', 'warning');
+        return;
+      }
+
+      showLoading('Generando reporte...');
+      try {
+        // Collect all available analysis results
+        const reportData = {
+          schema_version: 1,
+          tool: 'NEXA-HexForge Local Console',
+          observed_at_utc: new Date().toISOString().replace('Z', ''),
+          file: {
+            file_id: state.currentFile.id,
+            filename: state.currentFile.filename,
+            size: state.currentFile.size,
+            sha256: state.currentFile.sha256,
+          },
+          report_mode: mode,
+          modules: {},
+        };
+
+        // Try to fetch results from each module (they should be cached in UI)
+        // For now, re-run the analyses to get fresh data
+        const modulesToRun = [
+          { key: 'inspector', endpoint: '/inspect', body: { file_id: state.currentFile.id, preview_bytes: 256, report_mode: mode } },
+          { key: 'pe', endpoint: '/pe', body: { file_id: state.currentFile.id } },
+          { key: 'imports', endpoint: '/imports', body: { file_id: state.currentFile.id } },
+          { key: 'strings', endpoint: '/strings', body: { file_id: state.currentFile.id, min_length: 5, max_results: 200 } },
+          { key: 'indicators', endpoint: '/indicators', body: { file_id: state.currentFile.id } },
+          { key: 'hexview', endpoint: '/hexview', body: { file_id: state.currentFile.id, offset: 0, length: 256, width: 16 } },
+        ];
+
+        for (const mod of modulesToRun) {
+          try {
+            const data = await apiRequest(mod.endpoint, { method: 'POST', body: mod.body });
+            reportData.modules[mod.key] = data;
+          } catch (e) {
+            reportData.modules[mod.key] = { error: e.message };
+          }
+        }
+
+        // Write report via API
+        await apiRequest('/report/write', {
+          method: 'POST',
+          body: { report: reportData, destination },
+        });
+
+        showToast(`Reporte exportado a ${destination}`, 'success');
+        addActivity('Reports', 'Exportado', `${mode} → ${destination}`);
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        hideLoading();
+      }
     },
   },
 };
