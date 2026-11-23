@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -218,6 +217,9 @@ def _validate_origin(request: Request) -> None:
     origin = request.headers.get("origin")
     if origin is not None and origin not in {f"http://{h}" for h in allowed_hosts}:
         raise HTTPException(status_code=403, detail="Invalid Origin header")
+    fetch_site = request.headers.get("sec-fetch-site")
+    if fetch_site not in (None, "same-origin", "none"):
+        raise HTTPException(status_code=403, detail="Cross-site requests not permitted")
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         if not secrets.compare_digest(request.headers.get("x-hexforge-token", ""), SESSION_TOKEN):
             raise HTTPException(status_code=403, detail="Invalid local session token")
@@ -242,15 +244,6 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url=None,
     redoc_url=None,
-)
-
-# CORS: only allow localhost
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
 )
 
 # Static files
