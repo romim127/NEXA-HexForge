@@ -257,7 +257,10 @@ if static_dir.exists():
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
     # Apply exact Host validation to all requests and session token to writes.
-    _validate_origin(request)
+    try:
+        _validate_origin(request)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     # Limit request body size
     content_length = request.headers.get("content-length")
