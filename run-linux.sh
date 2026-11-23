@@ -61,7 +61,7 @@ find_port() {
     local port=$1
     while ! check_port ${port}; do
         echo -e "${YELLOW}Port ${port} in use, trying ${port}...${NC}"
-        ((port++))
+        port=$((port + 1))
     done
     echo ${port}
 }
@@ -113,6 +113,9 @@ main() {
         esac
     done
 
+    if [[ "${HOST}" != "127.0.0.1" && "${HOST}" != "localhost" ]]; then
+        echo "Only loopback hosts are supported"; exit 1
+    fi
     # Check virtual environment
     check_venv
 
@@ -139,7 +142,7 @@ main() {
         --host "${HOST}" \
         --port "${PORT}" \
         --log-level warning \
-        --access-log false
+        --no-access-log
 }
 
 # Trap signals for clean shutdown
