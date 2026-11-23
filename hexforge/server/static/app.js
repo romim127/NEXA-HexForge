@@ -13,6 +13,7 @@ const state = {
   currentModule: 'dashboard',
   recentActivity: [],
   serverStatus: 'connected',
+  sessionToken: null,
 };
 
 // ─── DOM Elements ───
@@ -95,9 +96,9 @@ function renderActivity() {
   container.innerHTML = state.recentActivity.slice(0, 10).map(a => `
     <div style="padding: 8px 0; border-bottom: 1px solid var(--border-color); display: flex; gap: 12px; align-items: center;">
       <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; min-width: 70px;">${a.time}</span>
-      <span style="color: var(--accent-cyan); font-size: 12px; min-width: 100px;">${a.module}</span>
-      <span style="color: var(--text-primary); font-size: 12px;">${a.action}</span>
-      <span style="color: var(--text-muted); font-size: 11px;">${a.detail}</span>
+      <span style="color: var(--accent-cyan); font-size: 12px; min-width: 100px;">${escapeHtml(a.module)}</span>
+      <span style="color: var(--text-primary); font-size: 12px;">${escapeHtml(a.action)}</span>
+      <span style="color: var(--text-muted); font-size: 11px;">${escapeHtml(a.detail)}</span>
     </div>
   `).join('');
 }
@@ -108,6 +109,7 @@ async function apiRequest(endpoint, options = {}) {
   const config = {
     headers: {
       'Content-Type': 'application/json',
+      ...(state.sessionToken ? {'X-HexForge-Token': state.sessionToken} : {}),
       ...options.headers,
     },
     ...options,
@@ -165,7 +167,7 @@ const moduleHandlers = {
           },
         });
         renderInspector(data);
-        addActivity('Inspector', 'Completado', `${formatBytes(data.size_bytes)} • ${data.file_signature}`);
+        addActivity('Inspector', 'Completado', `${formatBytes(data.size_bytes)} • ${escapeHtml(data.file_signature)}`);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -526,69 +528,18 @@ const moduleHandlers = {
 
   reports: {
     async export() {
-      if (!state.currentFile) {
-        showToast('No hay archivo cargado', 'warning');
-        return;
-      }
-
-      const mode = document.getElementById('report-mode').value;
-      const destination = document.getElementById('report-destination').value.trim();
-
-      if (!destination) {
-        showToast('Especifique un archivo de destino', 'warning');
-        return;
-      }
-
-      showLoading('Generando reporte...');
+      if (!state.currentFile) return showToast('Seleccione evidencia primero', 'warning');
+      const mode = document.getElementById('inspect-report-mode')?.value || 'redacted';
+      const filename = 'hexforge-' + Date.now() + '.json';
       try {
-        // Collect all available analysis results
-        const reportData = {
-          schema_version: 1,
-          tool: 'NEXA-HexForge Local Console',
-          observed_at_utc: new Date().toISOString().replace('Z', ''),
-          file: {
-            file_id: state.currentFile.id,
-            filename: state.currentFile.filename,
-            size: state.currentFile.size,
-            sha256: state.currentFile.sha256,
-          },
-          report_mode: mode,
-          modules: {},
-        };
-
-        // Try to fetch results from each module (they should be cached in UI)
-        // For now, re-run the analyses to get fresh data
-        const modulesToRun = [
-          { key: 'inspector', endpoint: '/inspect', body: { file_id: state.currentFile.id, preview_bytes: 256, report_mode: mode } },
-          { key: 'pe', endpoint: '/pe', body: { file_id: state.currentFile.id } },
-          { key: 'imports', endpoint: '/imports', body: { file_id: state.currentFile.id } },
-          { key: 'strings', endpoint: '/strings', body: { file_id: state.currentFile.id, min_length: 5, max_results: 200 } },
-          { key: 'indicators', endpoint: '/indicators', body: { file_id: state.currentFile.id } },
-          { key: 'hexview', endpoint: '/hexview', body: { file_id: state.currentFile.id, offset: 0, length: 256, width: 16 } },
-        ];
-
-        for (const mod of modulesToRun) {
-          try {
-            const data = await apiRequest(mod.endpoint, { method: 'POST', body: mod.body });
-            reportData.modules[mod.key] = data;
-          } catch (e) {
-            reportData.modules[mod.key] = { error: e.message };
-          }
-        }
-
-        // Write report via API
-        await apiRequest('/report/write', {
-          method: 'POST',
-          body: { report: reportData, destination },
-        });
-
-        showToast(`Reporte exportado a ${destination}`, 'success');
-        addActivity('Reports', 'Exportado', `${mode} → ${destination}`);
-      } catch (error) {
-        showToast(error.message, 'error');
-      } finally {
-        hideLoading();
-      }
+        const result = await apiRequest('/report/write', {method: 'POST',
+          body: {file_id: state.currentFile.id, report_mode: mode, filename}});
+        const a = document.createElement('a');
+        a.href = '/api/report/download/' + encodeURIComponent(result.filename);
+        a.download = result.filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        showToast('Informe generado', 'success');
+      } catch (error) { showToast(error.message, 'error'); }
     },
   },
 };
@@ -606,7 +557,7 @@ function renderInspector(data) {
         <tr><td>Tamaño</td><td>${formatBytes(data.size_bytes)} (${formatNumber(data.size_bytes)} bytes)</td></tr>
         <tr><td>SHA-256</td><td><code style="font-size: 11px;">${data.sha256}</code></td></tr>
         <tr><td>SHA-512</td><td><code style="font-size: 11px;">${data.sha512}</code></td></tr>
-        <tr><td>Firma</td><td>${data.file_signature}</td></tr>
+        <tr><td>Firma</td><td>${escapeHtml(data.file_signature)}</td></tr>
         <tr><td>Entropía</td><td>${data.entropy_bits_per_byte} bits/byte</td></tr>
         <tr><td>Preview Hex</td><td><code style="font-size: 10px;">${preview}</code></td></tr>
         <tr><td>Preview ASCII</td><td><code style="font-size: 10px;">${data.report_mode === 'redacted' ? '(redactado)' : (data.ascii_preview || '(sin preview)')}</code></td></tr>
@@ -622,7 +573,7 @@ function renderPe(data) {
   const container = document.getElementById('pe-result');
   const sections = data.sections?.map(s => `
     <tr>
-      <td>${s.name}</td>
+      <td>${escapeHtml(s.name)}</td>
       <td>${s.virtual_address}</td>
       <td>${s.raw_offset}</td>
       <td>${formatBytes(s.raw_size)}</td>
@@ -664,13 +615,13 @@ function renderImports(data) {
 
   const imports = data.imports?.map(dll => `
     <details style="margin: 8px 0; padding: 8px; background: var(--bg-tertiary); border-radius: var(--radius-sm);">
-      <summary style="cursor:pointer;font-weight:600;color:var(--accent-cyan);">${dll.dll} (${dll.functions.length} funciones)</summary>
+      <summary style="cursor:pointer;font-weight:600;color:var(--accent-cyan);">${escapeHtml(dll.dll)} (${dll.functions.length} funciones)</summary>
       <table class="result-table" style="margin-top:8px;font-size:11px;">
         <thead><tr><th>Función</th><th>Tipo</th></tr></thead>
         <tbody>
           ${dll.functions.map(f => `
             <tr>
-              <td>${f.name || `ORDINAL #${f.ordinal}`}</td>
+              <td>${escapeHtml(f.name || `ORDINAL #${f.ordinal}`)}</td>
               <td>${f.name ? 'Name' : 'Ordinal'}</td>
             </tr>
           `).join('')}
@@ -711,7 +662,7 @@ function renderIndicators(data) {
   const container = document.getElementById('indicators-result');
   const sections = data.sections?.map(s => `
     <tr>
-      <td>${s.name}</td>
+      <td>${escapeHtml(s.name)}</td>
       <td>${s.entropy.toFixed(4)}</td>
       <td>${formatBytes(s.raw_size)}</td>
     </tr>
@@ -719,9 +670,9 @@ function renderIndicators(data) {
 
   const findings = data.indicators?.map(f => `
     <tr>
-      <td>${f.section}</td>
+      <td>${escapeHtml(f.section)}</td>
       <td><span class="tag tag-${f.severity === 'review' ? 'review' : 'informational'}">${f.rule}</span></td>
-      <td>${f.reason}</td>
+      <td>${escapeHtml(f.reason)}</td>
     </tr>
   `).join('') || '<tr><td colspan="3">Sin hallazgos</td></tr>';
 
@@ -775,7 +726,7 @@ function renderArtifacts(data) {
       ${timeline.events?.slice(0, 20).map(e => `
         <div class="string-item">
           <span class="string-offset">${e.observed_time_utc}</span>
-          <span class="string-encoding">${e.source}</span>
+          <span class="string-encoding">${escapeHtml(e.source)}</span>
           <span class="string-value">${escapeHtml(e.file_path)}</span>
         </div>
       `).join('') || '<div class="string-item" style="color:var(--text-muted);">Sin eventos</div>'}
@@ -822,10 +773,10 @@ function renderRegistry(data) {
       <td>${e.event_id} (${e.operation})</td>
       <td>${e.timestamp_utc || 'N/A'}</td>
       <td>${escapeHtml(e.target_object)}</td>
-      <td>${e.registry_root || 'N/A'}</td>
+      <td>${escapeHtml(e.registry_root || 'N/A')}</td>
       <td>${e.registry_root_assumed ? '<span class="tag tag-warning">asumido</span>' : ''}</td>
       <td>${e.possible_persistence_location ? '<span class="tag tag-review">Sí</span>' : '<span class="tag tag-informational">No</span>'}</td>
-      <td>${e.matched_rules?.join(', ') || '—'}</td>
+      <td>${escapeHtml(e.matched_rules?.join(', ') || '—')}</td>
       <td><span class="tag tag-${e.assessment === 'review' ? 'review' : 'informational'}">${e.assessment}</span></td>
     </tr>
   `).join('') || '<tr><td colspan="9">Sin eventos</td></tr>';
@@ -863,12 +814,8 @@ function renderJson(data) {
 
 function escapeHtml(text) {
   if (text === null || text === undefined) return '';
-  return String(text)
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
-    .replace(/'/g, '&#039;');
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 // ─── UI Navigation ───
@@ -1007,7 +954,7 @@ function setupEventListeners() {
   document.getElementById('btn-stop-server')?.addEventListener('click', async () => {
     if (confirm('¿Detener el servidor local?')) {
       try {
-        await fetch(`${API_BASE}/../stop`, { method: 'POST' }); // This won't work directly, need separate endpoint
+        await apiRequest('/server/stop', { method: 'POST' });
         showToast('Servidor detenido', 'success');
         setTimeout(() => window.close(), 1000);
       } catch {
@@ -1058,6 +1005,8 @@ async function checkHealth() {
 // ─── Initialization ───
 async function init() {
   setupEventListeners();
+  try { const session = await apiRequest('/session'); state.sessionToken = session.token; }
+  catch (e) { showToast('No se pudo inicializar la sesión local', 'error'); }
 
   // Initial health check
   await checkHealth();
