@@ -143,13 +143,16 @@ class CustodyRegisterRequest(BaseModel):
 
 
 class CustodyAppendRequest(BaseModel):
-    record_id: str = Field(pattern=r'^[0-9a-f]{32} str = Field(min_length=1, max_length=128)
+    record_id: str = Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")
+    action: str
+    actor: str = Field(min_length=1, max_length=128)
     note: str = Field(max_length=2048)
     timestamp: str | None = None
 
 
 class CustodyVerifyRequest(BaseModel):
-    record_id: str = Field(pattern=r'^[0-9a-f]{32}$')
+    record_id: str = Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")
+    file_id: str
 
 
 class RegistryRequest(BaseModel):
