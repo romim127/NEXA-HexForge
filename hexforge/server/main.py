@@ -193,7 +193,7 @@ class PeAcademyRequest(BaseModel):
 class ReportWriteRequest(BaseModel):
     file_id: str
     report_mode: str = Field(default="redacted", pattern="^(forense|shareable|redacted)$")
-    filename: str = Field(default="hexforge-report.json", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,100}\\.json$")
+    filename: str = Field(default="hexforge-report.json", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,100}\.json$")
 
 
 
@@ -590,7 +590,7 @@ async def report_write(request: ReportWriteRequest):
 
 @app.get("/api/report/download/{filename}")
 async def report_download(filename: str):
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,100}\\.json", filename):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,100}\.json", filename):
         raise HTTPException(status_code=400, detail="Invalid report filename")
     path = REPORT_DIR / filename
     if path.is_symlink() or not path.is_file():
