@@ -6,6 +6,10 @@ All forensic operations are delegated to the existing hexforge modules.
 from __future__ import annotations
 
 import os
+import secrets
+import hashlib
+import re
+import ipaddress
 import signal
 import tempfile
 import threading
@@ -59,8 +63,11 @@ DEFAULT_PORT = 8765
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100 MiB
 MAX_CSV_SIZE = 32 * 1024 * 1024  # 32 MiB
 MAX_JSON_SIZE = 8 * 1024 * 1024  # 8 MiB
-UPLOAD_DIR = Path(tempfile.gettempdir()) / "nexaclient_uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = Path(tempfile.mkdtemp(prefix="nexa_hexforge_"))
+REPORT_DIR = UPLOAD_DIR / "reports"
+REPORT_DIR.mkdir(mode=0o700)
+SESSION_TOKEN = secrets.token_urlsafe(32)
+ACTIVE_PORT = DEFAULT_PORT
 
 
 # ─── Pydantic models for request/response ───
@@ -184,51 +191,38 @@ class PeAcademyRequest(BaseModel):
 
 
 class ReportWriteRequest(BaseModel):
-    report: dict
-    destination: str
+    file_id: str
+    report_mode: str = Field(default="redacted", pattern="^(forense|shareable|redacted)$")
+    filename: str = Field(default="hexforge-report.json", pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,100}\\.json$")
 
-    @field_validator("destination")
-    @classmethod
-    def validate_destination(cls, v: str) -> str:
-        # Prevent path traversal
-        path = Path(v).resolve()
-        # Only allow writing to current working directory or subdirectories
-        cwd = Path.cwd().resolve()
-        if not str(path).startswith(str(cwd)):
-            raise ValueError("Destination must be within current working directory")
-        return v
+
 
 
 # ─── Helper functions ───
 def _get_upload_path(file_id: str) -> Path:
-    """Get the upload path for a file_id, validating it exists and is safe."""
+    """Resolve only server-issued opaque IDs; never accept client paths."""
+    if not re.fullmatch(r"[0-9a-f]{32}", file_id):
+        raise HTTPException(status_code=400, detail="Invalid file ID")
     path = UPLOAD_DIR / file_id
-    try:
-        path.resolve().relative_to(UPLOAD_DIR.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid file_id")
-    if not path.exists():
+    if not path.is_file() or path.is_symlink():
         raise HTTPException(status_code=404, detail="File not found")
     return path
 
 
 def _validate_origin(request: Request) -> None:
-    """Validate Host and Origin headers to prevent CSRF and unauthorized access.
-
-    Uses exact matching (not prefix) to prevent subdomain bypasses.
-    """
+    """Exact loopback Host/Origin validation, with a session-bound API token."""
     host = request.headers.get("host", "")
-    origin = request.headers.get("origin", "")
-
-    # Allow only exact localhost origins (no subdomain bypass)
-    allowed_hosts = {f"{DEFAULT_HOST}:{DEFAULT_PORT}", "localhost", "127.0.0.1", f"127.0.0.1:{DEFAULT_PORT}"}
-    if host and host not in allowed_hosts:
+    allowed_hosts = {f"127.0.0.1:{ACTIVE_PORT}", f"localhost:{ACTIVE_PORT}"}
+    if host not in allowed_hosts:
         raise HTTPException(status_code=403, detail="Invalid Host header")
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in {f"http://{h}" for h in allowed_hosts}:
+        raise HTTPException(status_code=403, detail="Invalid Origin header")
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        if not secrets.compare_digest(request.headers.get("x-hexforge-token", ""), SESSION_TOKEN):
+            raise HTTPException(status_code=403, detail="Invalid local session token")
 
-    if origin:
-        allowed_origins = {f"http://{DEFAULT_HOST}:{DEFAULT_PORT}", "http://localhost", "http://127.0.0.1", f"http://127.0.0.1:{DEFAULT_PORT}"}
-        if origin not in allowed_origins:
-            raise HTTPException(status_code=403, detail="Invalid Origin header")
+
 
 
 # ─── Lifespan ───
@@ -268,13 +262,12 @@ if static_dir.exists():
 # ─── Middleware ───
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
-    # Validate origin/host on state-changing requests
-    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
-        _validate_origin(request)
+    # Apply exact Host validation to all requests and session token to writes.
+    _validate_origin(request)
 
     # Limit request body size
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+    if content_length and (not content_length.isdecimal() or int(content_length) > MAX_UPLOAD_SIZE + 1048576):
         return JSONResponse(
             status_code=413,
             content={"detail": "Request body too large"},
@@ -283,6 +276,7 @@ async def security_middleware(request: Request, call_next):
     response = await call_next(request)
 
     # Security headers
+    response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
@@ -298,63 +292,35 @@ async def health():
     return HealthResponse()
 
 
+@app.get("/api/session")
+async def session_token():
+    return {"token": SESSION_TOKEN}
+
+
 @app.post("/api/upload", response_model=FileUploadResponse)
 async def upload_file(file: UploadFile = File(...)):
-    """Upload a file for analysis. Returns a file_id for subsequent operations.
-
-    Streams file to disk in chunks to bound memory usage.
-    """
-    # Validate filename
+    """Bounded streaming upload; opaque ID, exclusive temporary file."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
-
-    # Generate secure file_id upfront (will be SHA-256 of content)
-    from hashlib import sha256
-    hasher = sha256()
-    file_path = UPLOAD_DIR / "temp_upload"
-    size = 0
-
-    # Stream to disk in chunks using aiofiles for async writes
-    CHUNK_SIZE = 1024 * 1024  # 1 MiB
+    file_id = secrets.token_hex(16)
+    path = UPLOAD_DIR / file_id
+    total = 0
+    digest = hashlib.sha256()
     try:
-        async with aiofiles.open(file_path, 'wb') as f:
-            async for chunk in file.iter_bytes(CHUNK_SIZE):
-                hasher.update(chunk)
-                size += len(chunk)
-                if size > MAX_UPLOAD_SIZE:
-                    raise HTTPException(status_code=413, detail="File too large (max 100 MiB)")
-                await f.write(chunk)
-    except HTTPException:
-        try:
-            file_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        with path.open("xb") as output:
+            os.chmod(path, 0o600)
+            while chunk := await file.read(1024 * 1024):
+                total += len(chunk)
+                if total > MAX_UPLOAD_SIZE:
+                    raise HTTPException(status_code=413, detail="File too large")
+                digest.update(chunk)
+                output.write(chunk)
+    except Exception:
+        path.unlink(missing_ok=True)
         raise
-    except Exception as e:
-        try:
-            file_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
-
-    file_id = hasher.hexdigest()[:32]
-    final_path = UPLOAD_DIR / file_id
-
-    # Atomic rename to final name
-    try:
-        file_path.rename(final_path)
-    except OSError as e:
-        try:
-            file_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise HTTPException(status_code=500, detail=f"Failed to finalize upload: {e}")
-
     return FileUploadResponse(
-        file_id=file_id,
-        filename=file.filename,
-        size=size,
-        sha256=hasher.hexdigest(),
+        file_id=file_id, filename=Path(file.filename).name,
+        size=total, sha256=digest.hexdigest()
     )
 
 
@@ -604,16 +570,32 @@ async def academy_pe(request: PeAcademyRequest):
 # ─── Report writing ───
 @app.post("/api/report/write")
 async def report_write(request: ReportWriteRequest):
-    """Write a report to disk (exclusive create, no overwrite)."""
+    """Recompute from server-held evidence, save exclusively to private report dir."""
+    file_path = _get_upload_path(request.file_id)
+    filename = request.filename
+    if filename in (".", "..") or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    destination = REPORT_DIR / filename
     try:
-        write_report(request.report, request.destination)
-        return {"status": "ok", "path": request.destination}
+        report = inspect_file(file_path, report_mode=request.report_mode)
+        write_report(report, destination)
+        return {"status": "ok", "filename": filename, "report_mode": request.report_mode}
     except FileExistsError:
-        raise HTTPException(status_code=409, detail="Report file already exists (no overwrite)")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Report write failed: {e}")
+        raise HTTPException(status_code=409, detail="Report already exists")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid report request")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Report export failed")
+
+
+@app.get("/api/report/download/{filename}")
+async def report_download(filename: str):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,100}\\.json", filename):
+        raise HTTPException(status_code=400, detail="Invalid report filename")
+    path = REPORT_DIR / filename
+    if path.is_symlink() or not path.is_file():
+        raise HTTPException(status_code=404, detail="Report not found")
+    return FileResponse(path, filename=filename, media_type="application/json")
 
 
 # ─── Server control ───
@@ -658,7 +640,10 @@ async def serve_static(path: str):
 # ─── Server control ───
 def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, open_browser: bool = True):
     """Run the server in a background thread."""
-    global _server_thread, _server_instance
+    global _server_thread, _server_instance, ACTIVE_PORT
+    if host not in ("127.0.0.1", "localhost"):
+        raise ValueError("Only loopback binding is supported")
+    ACTIVE_PORT = port
 
     import uvicorn
 
