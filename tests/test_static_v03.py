@@ -24,7 +24,9 @@ class IndicatorTests(unittest.TestCase):
             result=section_indicators(p)
             self.assertEqual(result["verdict"],"not_determined")
             self.assertEqual(len(result["sections"]),1)
-            self.assertEqual(inspect_imports(p)["status"],"no_import_directory")
+            imports_result = inspect_imports(p)
+            self.assertEqual(imports_result["state"], "completed")
+            self.assertIn("sin directorio", imports_result["reason"].lower())
     def test_writable_executable_section(self):
         with tempfile.TemporaryDirectory() as d:
             data=synthetic_pe()

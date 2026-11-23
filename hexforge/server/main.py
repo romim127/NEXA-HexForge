@@ -25,12 +25,12 @@ from pydantic import BaseModel, Field, field_validator
 
 from hexforge.core import inspect_file, write_report
 from hexforge.hexview import hex_rows
-from hexforge.pe import inspect_pe
-from hexforge.imports import inspect_imports
+from hexforge.pe import inspect_pe, PEError
+from hexforge.imports import inspect_imports, ImportsError
 from hexforge.strings import extract_strings
-from hexforge.indicators import section_indicators
-from hexforge.artifacts import load_export, timeline as artifacts_timeline
-from hexforge.timeline import correlate
+from hexforge.indicators import section_indicators, IndicatorsError
+from hexforge.artifacts import load_export, timeline as artifacts_timeline, ArtifactsError
+from hexforge.timeline import correlate, TimelineError
 from hexforge.custody import (
     register_evidence,
     append_event,
@@ -38,8 +38,9 @@ from hexforge.custody import (
     verify_evidence,
     save_new,
     load_record,
+    CustodyError,
 )
-from hexforge.registry_monitor import analyze_export
+from hexforge.registry_monitor import analyze_export, RegistryMonitorError
 from hexforge.academy import hex_to_binary, binary_to_hex
 from hexforge.byte_academy import inspect_byte
 from hexforge.entropy_academy import inspect_section_entropy
@@ -367,6 +368,9 @@ async def pe_inspect(request: PeRequest):
     try:
         result = inspect_pe(file_path)
         return result
+    except PEError as e:
+        # Return structured error with state, don't throw 500
+        return {"state": e.state, "reason": str(e), "execution_performed": False}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -380,6 +384,9 @@ async def imports(request: PeRequest):
     try:
         result = inspect_imports(file_path)
         return result
+    except ImportsError as e:
+        # Return structured error with state, don't throw 500
+        return {"state": e.state, "reason": str(e), "execution_performed": False}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -393,6 +400,9 @@ async def indicators(request: PeRequest):
     try:
         result = section_indicators(file_path)
         return result
+    except IndicatorsError as e:
+        # Return structured error with state, don't throw 500
+        return {"state": e.state, "reason": str(e), "execution_performed": False}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -407,6 +417,8 @@ async def artifacts(request: ArtifactsRequest):
         export = load_export(file_path)
         tl = artifacts_timeline(export)
         return {"export": {k: v for k, v in export.items() if k != "records"}, "timeline": tl}
+    except ArtifactsError as e:
+        return {"state": e.state, "reason": str(e), "execution_performed": False}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -421,6 +433,8 @@ async def timeline(request: TimelineRequest):
         export = load_export(file_path)
         result = correlate(export, request.window_seconds)
         return result
+    except (ArtifactsError, TimelineError) as e:
+        return {"state": e.state, "reason": str(e), "execution_performed": False}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -438,6 +452,8 @@ async def custody_register(request: CustodyRegisterRequest):
             CUSTODY_RECORDS[record_id] = record
         return {"record_id": record_id, "record": record,
                 "limitations": ["Session-only record; export for long-term retention."]}
+    except CustodyError as exc:
+        return {"state": exc.state, "reason": str(exc)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -451,6 +467,8 @@ async def custody_append(request: CustodyAppendRequest):
             raise HTTPException(status_code=404, detail="Custody record not found")
         try:
             updated = append_event(record, request.action, request.actor, request.note, request.timestamp)
+        except CustodyError as exc:
+            return {"state": exc.state, "reason": str(exc)}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         CUSTODY_RECORDS[request.record_id] = updated
@@ -466,6 +484,8 @@ async def custody_verify(request: CustodyVerifyRequest):
             raise HTTPException(status_code=404, detail="Custody record not found")
         try:
             return verify_evidence(record, file_path)
+        except CustodyError as exc:
+            return {"state": exc.state, "reason": str(exc)}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
@@ -477,6 +497,8 @@ async def registry(request: RegistryRequest):
     try:
         result = analyze_export(file_path)
         return result
+    except RegistryMonitorError as e:
+        return {"state": e.state, "reason": str(e), "execution_performed": False}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

@@ -62,25 +62,25 @@ class TestPEParserRobustness(unittest.TestCase):
         self.assertEqual(len(result["sections"]), 1)
 
     def test_dos_header_too_small_rejected(self):
-        """SEC-005-2: DOS header < 64 bytes rejected."""
+        """SEC-005-2: DOS header < 64 bytes rejected (returns not_applicable state)."""
         test_file = self.tmppath / "small_dos.exe"
         test_file.write_bytes(b"MZ")
 
-        with self.assertRaises(ValueError) as ctx:
-            inspect_pe(test_file)
-        self.assertIn("DOS", str(ctx.exception))
+        result = inspect_pe(test_file)
+        self.assertEqual(result["state"], "not_applicable")
+        self.assertIn("demasiado pequeño", result["reason"].lower())
 
     def test_missing_mz_signature_rejected(self):
-        """SEC-005-3: Missing MZ signature rejected."""
+        """SEC-005-3: Missing MZ signature rejected (returns not_applicable state)."""
         test_file = self.tmppath / "no_mz.exe"
         dos = bytearray(64)
         dos[0:2] = b'ZM'  # Wrong signature
         dos[60:64] = struct.pack('<I', 64)
         test_file.write_bytes(self._create_pe(dos_hdr=dos))
 
-        with self.assertRaises(ValueError) as ctx:
-            inspect_pe(test_file)
-        self.assertIn("MZ", str(ctx.exception))
+        result = inspect_pe(test_file)
+        self.assertEqual(result["state"], "not_applicable")
+        self.assertIn("MZ", result["reason"])
 
     def test_pe_offset_too_low_rejected(self):
         """SEC-005-4: PE offset < 64 rejected."""
@@ -121,7 +121,7 @@ class TestPEParserRobustness(unittest.TestCase):
         self.assertIn("lfanew", str(ctx.exception))
 
     def test_missing_pe_signature_rejected(self):
-        """SEC-005-7: Missing PE signature rejected."""
+        """SEC-005-7: Missing PE signature rejected (returns not_applicable state)."""
         test_file = self.tmppath / "no_pe_sig.exe"
         dos = bytearray(64)
         dos[0:2] = b'MZ'
@@ -129,9 +129,9 @@ class TestPEParserRobustness(unittest.TestCase):
         # Create file with no PE signature
         test_file.write_bytes(dos + b'\x00' * 100)
 
-        with self.assertRaises(ValueError) as ctx:
-            inspect_pe(test_file)
-        self.assertIn("PE", str(ctx.exception))
+        result = inspect_pe(test_file)
+        self.assertEqual(result["state"], "not_applicable")
+        self.assertIn("PE", result["reason"])
 
     def test_too_many_sections_rejected(self):
         """SEC-005-8: More than MAX_SECTIONS rejected."""
@@ -154,7 +154,7 @@ class TestPEParserRobustness(unittest.TestCase):
         self.assertIn("secciones", str(ctx.exception))
 
     def test_invalid_pe_magic_rejected(self):
-        """SEC-005-9: Invalid PE optional header magic rejected."""
+        """SEC-005-9: Invalid PE optional header magic rejected (returns not_applicable state)."""
         test_file = self.tmppath / "bad_magic.exe"
         dos = bytearray(64)
         dos[0:2] = b'MZ'
@@ -164,9 +164,9 @@ class TestPEParserRobustness(unittest.TestCase):
 
         test_file.write_bytes(self._create_pe(dos_hdr=dos, opt_hdr=opt))
 
-        with self.assertRaises(ValueError) as ctx:
-            inspect_pe(test_file)
-        self.assertIn("Optional", str(ctx.exception))
+        result = inspect_pe(test_file)
+        self.assertEqual(result["state"], "not_applicable")
+        self.assertIn("Optional", result["reason"])
 
     def test_truncated_optional_header_rejected(self):
         """SEC-005-10: Truncated optional header rejected."""

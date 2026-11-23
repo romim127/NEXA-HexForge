@@ -573,6 +573,29 @@ function renderInspector(data) {
 
 function renderPe(data) {
   const container = document.getElementById('pe-result');
+
+  // Handle state-based responses
+  if (data.state) {
+    const stateLabels = {
+      'pending': 'PENDIENTE',
+      'not_applicable': 'NO APLICABLE',
+      'no_findings': 'SIN HALLAZGOS',
+      'completed': 'COMPLETADO',
+      'error': 'ERROR',
+    };
+    const label = stateLabels[data.state] || data.state.toUpperCase();
+    const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+      </div>
+    `;
+    return;
+  }
+
   const sections = data.sections?.map(s => `
     <tr>
       <td>${escapeHtml(s.name)}</td>
@@ -610,6 +633,29 @@ function renderPe(data) {
 
 function renderImports(data) {
   const container = document.getElementById('imports-result');
+
+  // Handle state-based responses
+  if (data.state) {
+    const stateLabels = {
+      'pending': 'PENDIENTE',
+      'not_applicable': 'NO APLICABLE',
+      'no_findings': 'SIN HALLAZGOS',
+      'completed': 'COMPLETADO',
+      'error': 'ERROR',
+    };
+    const label = stateLabels[data.state] || data.state.toUpperCase();
+    const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+      </div>
+    `;
+    return;
+  }
+
   if (data.status === 'no_import_directory') {
     container.innerHTML = '<div class="json-viewer">Sin directorio de importaciones</div>';
     return;
@@ -662,6 +708,29 @@ function renderStrings(data) {
 
 function renderIndicators(data) {
   const container = document.getElementById('indicators-result');
+
+  // Handle state-based responses
+  if (data.state) {
+    const stateLabels = {
+      'pending': 'PENDIENTE',
+      'not_applicable': 'NO APLICABLE',
+      'no_findings': 'SIN HALLAZGOS',
+      'completed': 'COMPLETADO',
+      'error': 'ERROR',
+    };
+    const label = stateLabels[data.state] || data.state.toUpperCase();
+    const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+      </div>
+    `;
+    return;
+  }
+
   const sections = data.sections?.map(s => `
     <tr>
       <td>${escapeHtml(s.name)}</td>
@@ -714,6 +783,50 @@ function renderArtifacts(data) {
   const exportData = data.export || {};
   const timeline = data.timeline || {};
 
+  // Handle state-based responses for export
+  if (exportData.state) {
+    const stateLabels = {
+      'pending': 'PENDIENTE',
+      'not_applicable': 'NO APLICABLE',
+      'no_findings': 'SIN HALLAZGOS',
+      'completed': 'COMPLETADO',
+      'error': 'ERROR',
+    };
+    const label = stateLabels[exportData.state] || exportData.state.toUpperCase();
+    const tagClass = exportData.state === 'error' ? 'tag-error' : exportData.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Export: ${label}</span>
+        ${exportData.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(exportData.reason)}</p>` : ''}
+        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+      </div>
+    `;
+    return;
+  }
+
+  // Handle state-based responses for timeline
+  if (timeline.state) {
+    const stateLabels = {
+      'pending': 'PENDIENTE',
+      'not_applicable': 'NO APLICABLE',
+      'no_findings': 'SIN HALLAZGOS',
+      'completed': 'COMPLETADO',
+      'error': 'ERROR',
+    };
+    const label = stateLabels[timeline.state] || timeline.state.toUpperCase();
+    const tagClass = timeline.state === 'error' ? 'tag-error' : timeline.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Timeline: ${label}</span>
+        ${timeline.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(timeline.reason)}</p>` : ''}
+        ${timeline.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${timeline.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+      </div>
+    `;
+    return;
+  }
+
   container.innerHTML = `
     <table class="result-table">
       <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
@@ -739,6 +852,29 @@ function renderArtifacts(data) {
 
 function renderTimeline(data) {
   const container = document.getElementById('timeline-result');
+
+  // Handle state-based responses
+  if (data.state) {
+    const stateLabels = {
+      'pending': 'PENDIENTE',
+      'not_applicable': 'NO APLICABLE',
+      'no_findings': 'SIN HALLAZGOS',
+      'completed': 'COMPLETADO',
+      'error': 'ERROR',
+    };
+    const label = stateLabels[data.state] || data.state.toUpperCase();
+    const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+      </div>
+    `;
+    return;
+  }
+
   const correlations = data.correlations?.map(c => `
     <tr>
       <td>${c.left_artifact} → ${c.right_artifact}</td>
@@ -770,6 +906,29 @@ function renderTimeline(data) {
 
 function renderRegistry(data) {
   const container = document.getElementById('registry-result');
+
+  // Handle state-based responses
+  if (data.state) {
+    const stateLabels = {
+      'pending': 'PENDIENTE',
+      'not_applicable': 'NO APLICABLE',
+      'no_findings': 'SIN HALLAZGOS',
+      'completed': 'COMPLETADO',
+      'error': 'ERROR',
+    };
+    const label = stateLabels[data.state] || data.state.toUpperCase();
+    const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
+
+    container.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px;">
+        <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+      </div>
+    `;
+    return;
+  }
+
   const events = data.events?.map(e => `
     <tr>
       <td>${e.event_id} (${e.operation})</td>
