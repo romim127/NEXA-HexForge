@@ -1007,8 +1007,40 @@ async function checkHealth() {
   }
 }
 
+// ─── Splash Screen ───
+function initSplashScreen() {
+  const splashScreen = document.getElementById('splash-screen');
+  const splashBtn = document.getElementById('splash-btn');
+
+  // Check if welcome was shown in this session (sessionStorage)
+  const welcomeShown = sessionStorage.getItem('nexahf_welcome_shown');
+
+  if (welcomeShown === 'true') {
+    // Hide splash screen immediately
+    splashScreen.classList.add('hidden');
+  } else {
+    // Show splash screen (already visible by default)
+    splashScreen.classList.remove('hidden');
+  }
+
+  // Button handler
+  splashBtn.addEventListener('click', () => {
+    // Mark as shown for this session
+    sessionStorage.setItem('nexahf_welcome_shown', 'true');
+    // Hide splash with animation
+    splashScreen.style.opacity = '0';
+    splashScreen.style.transition = 'opacity 0.3s ease';
+    setTimeout(() => {
+      splashScreen.classList.add('hidden');
+    }, 300);
+  });
+}
+
 // ─── Initialization ───
 async function init() {
+  // Initialize splash screen first (before async operations)
+  initSplashScreen();
+
   setupEventListeners();
   try { const session = await apiRequest('/session'); state.sessionToken = session.token; }
   catch (e) { showToast('No se pudo inicializar la sesión local', 'error'); }
