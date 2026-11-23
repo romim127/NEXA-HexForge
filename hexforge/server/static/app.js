@@ -14,6 +14,7 @@ const state = {
   recentActivity: [],
   serverStatus: 'connected',
   sessionToken: null,
+  custodyRecordId: null,
 };
 
 // ─── DOM Elements ───
@@ -333,6 +334,7 @@ const moduleHandlers = {
             timestamp: formData.timestamp || null,
           },
         });
+        state.custodyRecordId = data.record_id;
         document.getElementById('custody-register-result').innerHTML = renderJson(data);
         showToast('Evidencia registrada correctamente', 'success');
         addActivity('Custody (C3)', 'Registrado', data.evidence_id);
@@ -348,7 +350,7 @@ const moduleHandlers = {
       try {
         const data = await apiRequest('/custody/append', {
           method: 'POST',
-          body: formData,
+          body: {...formData, record_id: state.custodyRecordId},
         });
         document.getElementById('custody-append-result').innerHTML = renderJson(data);
         showToast('Evento añadido a la cadena', 'success');
@@ -366,7 +368,7 @@ const moduleHandlers = {
         const data = await apiRequest('/custody/verify', {
           method: 'POST',
           body: {
-            record_path: formData.record_path,
+            record_id: state.custodyRecordId,
             file_id: state.currentFile.id,
           },
         });
@@ -856,6 +858,7 @@ async function handleFileSelect(file) {
     }
 
     state.currentFile = {...data, id: data.file_id};
+    state.custodyRecordId = null;
     elements.selectedFileName.textContent = data.filename;
     elements.fileInfo.textContent = `${formatBytes(data.size)} • SHA256: ${data.sha256.substring(0, 16)}...`;
     elements.btnAnalyze.disabled = false;
