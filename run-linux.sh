@@ -138,11 +138,7 @@ main() {
     fi
 
     # Run uvicorn
-    exec "${UVICORN}" ${SERVER_MODULE} \
-        --host "${HOST}" \
-        --port "${PORT}" \
-        --log-level warning \
-        --no-access-log
+    exec "${PYTHON}" -m hexforge.server_cli --host "${HOST}" --port "${PORT}" --no-browser
 }
 
 # Trap signals for clean shutdown
