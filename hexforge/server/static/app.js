@@ -924,6 +924,7 @@ function setupEventListeners() {
   document.getElementById('btn-imports-explain')?.addEventListener('click', () => moduleHandlers['academy-imports'].explain());
   document.getElementById('btn-rva-map')?.addEventListener('click', () => moduleHandlers['academy-rva'].map());
   document.getElementById('btn-export-report')?.addEventListener('click', () => moduleHandlers.reports.export());
+  elements.btnReport?.addEventListener('click', () => moduleHandlers.reports.export());
 
   // Custody tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
