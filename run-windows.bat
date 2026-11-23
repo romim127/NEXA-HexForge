@@ -45,9 +45,11 @@ if "%ARG%"=="--no-browser" (
 ) else if "%ARG:~0,6%"=="--host=" (
     set HOST=%ARG:~6%
 ) else if "%ARG%"=="--help" goto :show_help
-if "%ARG:~0,1%"=="-" (
-    echo Unknown option: %ARG%
-    goto :show_help
+if "%ARG:~0,1%"=="-" if not "%ARG%"=="--no-browser" (
+    if not "%ARG:~0,7%"=="--port=" if not "%ARG:~0,7%"=="--host=" (
+        echo Unknown option: %ARG%
+        exit /b 1
+    )
 )
 shift
 goto :parse_args
@@ -63,6 +65,10 @@ echo   --help            Show this help
 exit /b 0
 
 :check_venv
+if not "%HOST%"=="127.0.0.1" if not "%HOST%"=="localhost" (
+    echo Only loopback hosts are supported
+    exit /b 1
+)
 REM Check if virtual environment exists
 if not exist "%PYTHON%" (
     echo %YELLOW%Virtual environment not found. Creating...%NC%
@@ -98,7 +104,7 @@ if "%OPEN_BROWSER%"=="true" (
 )
 
 REM Run uvicorn
-"%UVICORN%" %SERVER_MODULE% --host %HOST% --port %PORT% --log-level warning --access-log false
+"%UVICORN%" %SERVER_MODULE% --host %HOST% --port %PORT% --log-level warning --no-access-log
 
 REM Pause on error
 if %ERRORLEVEL% neq 0 (
