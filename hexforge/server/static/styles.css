@@ -352,6 +352,7 @@ html, body {
 .module-panel {
   display: none;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 24px;
 }
@@ -427,8 +428,8 @@ html, body {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  overflow: hidden;
   min-height: 200px;
+  overflow-x: auto;
 }
 
 .result-container:empty::before {
