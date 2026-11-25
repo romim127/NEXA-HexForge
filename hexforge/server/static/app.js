@@ -168,6 +168,10 @@ const moduleHandlers = {
           },
         });
         renderInspector(data);
+        // Track completion if successful
+        if (!data.state || data.state === 'completed') {
+          markModuleCompleted('Inspector');
+        }
         addActivity('Inspector', 'Completado', `${formatBytes(data.size_bytes)} • ${escapeHtml(data.file_signature)}`);
       } catch (error) {
         showToast(error.message, 'error');
@@ -187,6 +191,10 @@ const moduleHandlers = {
           body: { file_id: state.currentFile.id },
         });
         renderPe(data);
+        // Track completion if successful (state === 'completed' or legacy success)
+        if (!data.state || data.state === 'completed') {
+          markModuleCompleted('PE');
+        }
         addActivity('PE', 'Completado', `${data.format} • ${data.section_count} secciones`);
       } catch (error) {
         showToast(error.message, 'error');
@@ -206,6 +214,10 @@ const moduleHandlers = {
           body: { file_id: state.currentFile.id },
         });
         renderImports(data);
+        // Track completion if successful
+        if (!data.state || data.state === 'completed') {
+          markModuleCompleted('Imports');
+        }
         const fnCount = data.imports?.reduce((sum, dll) => sum + dll.functions.length, 0) || 0;
         addActivity('Imports', 'Completado', `${data.imports?.length || 0} DLLs • ${fnCount} funciones`);
       } catch (error) {
@@ -230,6 +242,10 @@ const moduleHandlers = {
           },
         });
         renderStrings(data);
+        // Track completion if successful
+        if (!data.state || data.state === 'completed') {
+          markModuleCompleted('Strings');
+        }
         addActivity('Strings', 'Completado', `${data.strings?.length || 0} cadenas`);
       } catch (error) {
         showToast(error.message, 'error');
@@ -249,6 +265,12 @@ const moduleHandlers = {
           body: { file_id: state.currentFile.id },
         });
         renderIndicators(data);
+        // Track completion if successful
+        if (!data.state || data.state === 'completed') {
+          markModuleCompleted('Indicators');
+          // Store for dashboard stats
+          state.lastIndicatorsData = data;
+        }
         const reviewCount = data.indicators?.filter(i => i.severity === 'review').length || 0;
         addActivity('Indicators', 'Completado', `${reviewCount} para revisión`);
       } catch (error) {
@@ -292,6 +314,11 @@ const moduleHandlers = {
           body: { file_id: state.currentFile.id },
         });
         renderArtifacts(data);
+        // Track completion if successful (check export state)
+        const exportState = data.export?.state;
+        if ((!exportState || exportState === 'completed') && (!data.timeline?.state || data.timeline.state === 'completed')) {
+          markModuleCompleted('Artifacts (C1)');
+        }
         addActivity('Artifacts (C1)', 'Completado', `${data.timeline?.count || 0} eventos`);
       } catch (error) {
         showToast(error.message, 'error');
@@ -312,6 +339,10 @@ const moduleHandlers = {
           body: { file_id: state.currentFile.id, window_seconds: windowSeconds },
         });
         renderTimeline(data);
+        // Track completion if successful
+        if (!data.state || data.state === 'completed') {
+          markModuleCompleted('Timeline (C2)');
+        }
         addActivity('Timeline (C2)', 'Completado', `${data.correlation_count || 0} correlaciones`);
       } catch (error) {
         showToast(error.message, 'error');
@@ -394,6 +425,10 @@ const moduleHandlers = {
           body: { file_id: state.currentFile.id },
         });
         renderRegistry(data);
+        // Track completion if successful
+        if (!data.state || data.state === 'completed') {
+          markModuleCompleted('Registry');
+        }
         addActivity('Registry', 'Completado', `${data.review_count || 0} para revisión de ${data.count || 0}`);
       } catch (error) {
         showToast(error.message, 'error');
@@ -586,16 +621,105 @@ function renderPe(data) {
     const label = stateLabels[data.state] || data.state.toUpperCase();
     const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
 
+    // For completed: show badge + full results
+    if (data.state === 'completed') {
+      const sections = data.sections?.map(s => `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${s.virtual_address}</td>
+          <td>${s.raw_offset}</td>
+          <td>${formatBytes(s.raw_size)}</td>
+          <td>${formatBytes(s.virtual_size)}</td>
+          <td>${s.characteristics}</td>
+          <td>${s.executable ? '✓' : '✗'}</td>
+          <td>${s.writable ? '✓' : '✗'}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="8">Sin secciones</td></tr>';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Formato</td><td>${escapeHtml(data.format)}</td></tr>
+            <tr><td>Machine</td><td>${escapeHtml(data.machine)}</td></tr>
+            <tr><td>Characteristics</td><td>${escapeHtml(data.characteristics)}</td></tr>
+            <tr><td>PE Header Offset</td><td>0x${data.pe_header_offset.toString(16).toUpperCase()}</td></tr>
+            <tr><td>Entry Point RVA</td><td>${escapeHtml(data.entry_point_rva)}</td></tr>
+            <tr><td>Image Base</td><td>${escapeHtml(data.image_base)}</td></tr>
+            <tr><td>Section Count</td><td>${escapeHtml(data.section_count)}</td></tr>
+          </tbody>
+        </table>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Secciones</h4>
+        <table class="result-table">
+          <thead><tr><th>Nombre</th><th>Virtual Addr</th><th>Raw Offset</th><th>Raw Size</th><th>Virtual Size</th><th>Flags</th><th>Exe</th><th>Wrt</th></tr></thead>
+          <tbody>${sections}</tbody>
+        </table>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For no_findings: show badge + reason + available data (if any)
+    if (data.state === 'no_findings') {
+      const sections = data.sections?.map(s => `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${s.virtual_address}</td>
+          <td>${s.raw_offset}</td>
+          <td>${formatBytes(s.raw_size)}</td>
+          <td>${formatBytes(s.virtual_size)}</td>
+          <td>${s.characteristics}</td>
+          <td>${s.executable ? '✓' : '✗'}</td>
+          <td>${s.writable ? '✓' : '✗'}</td>
+        </tr>
+      `).join('') || '';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${sections ? `
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Secciones</h4>
+        <table class="result-table">
+          <thead><tr><th>Nombre</th><th>Virtual Addr</th><th>Raw Offset</th><th>Raw Size</th><th>Virtual Size</th><th>Flags</th><th>Exe</th><th>Wrt</th></tr></thead>
+          <tbody>${sections}</tbody>
+        </table>
+        ` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For not_applicable: explanation + requirements
+    if (data.state === 'not_applicable') {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+          ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+          <p style="margin-top: 16px; color: var(--text-secondary);">Requiere: archivo PE válido con firma MZ y PE correcta</p>
+          ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    // For pending/error: show state only
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px;">
         <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
         ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
-        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
       </div>
     `;
     return;
   }
 
+  // Legacy response without state field (backward compatibility)
   const sections = data.sections?.map(s => `
     <tr>
       <td>${escapeHtml(s.name)}</td>
@@ -613,13 +737,13 @@ function renderPe(data) {
     <table class="result-table">
       <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
       <tbody>
-        <tr><td>Formato</td><td>${data.format}</td></tr>
-        <tr><td>Machine</td><td>${data.machine}</td></tr>
-        <tr><td>Characteristics</td><td>${data.characteristics}</td></tr>
+        <tr><td>Formato</td><td>${escapeHtml(data.format)}</td></tr>
+        <tr><td>Machine</td><td>${escapeHtml(data.machine)}</td></tr>
+        <tr><td>Characteristics</td><td>${escapeHtml(data.characteristics)}</td></tr>
         <tr><td>PE Header Offset</td><td>0x${data.pe_header_offset.toString(16).toUpperCase()}</td></tr>
-        <tr><td>Entry Point RVA</td><td>${data.entry_point_rva}</td></tr>
-        <tr><td>Image Base</td><td>${data.image_base}</td></tr>
-        <tr><td>Section Count</td><td>${data.section_count}</td></tr>
+        <tr><td>Entry Point RVA</td><td>${escapeHtml(data.entry_point_rva)}</td></tr>
+        <tr><td>Image Base</td><td>${escapeHtml(data.image_base)}</td></tr>
+        <tr><td>Section Count</td><td>${escapeHtml(data.section_count)}</td></tr>
       </tbody>
     </table>
     <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Secciones</h4>
@@ -627,7 +751,7 @@ function renderPe(data) {
       <thead><tr><th>Nombre</th><th>Virtual Addr</th><th>Raw Offset</th><th>Raw Size</th><th>Virtual Size</th><th>Flags</th><th>Exe</th><th>Wrt</th></tr></thead>
       <tbody>${sections}</tbody>
     </table>
-    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
   `;
 }
 
@@ -646,16 +770,91 @@ function renderImports(data) {
     const label = stateLabels[data.state] || data.state.toUpperCase();
     const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
 
+    // For completed: show badge + full results
+    if (data.state === 'completed') {
+      const imports = data.imports?.map(dll => `
+        <details style="margin: 8px 0; padding: 8px; background: var(--bg-tertiary); border-radius: var(--radius-sm);">
+          <summary style="cursor:pointer;font-weight:600;color:var(--accent-cyan);">${escapeHtml(dll.dll)} (${dll.functions.length} funciones)</summary>
+          <table class="result-table" style="margin-top:8px;font-size:11px;">
+            <thead><tr><th>Función</th><th>Tipo</th></tr></thead>
+            <tbody>
+              ${dll.functions.map(f => `
+                <tr>
+                  <td>${escapeHtml(f.name || `ORDINAL #${f.ordinal}`)}</td>
+                  <td>${f.name ? 'Name' : 'Ordinal'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </details>
+      `).join('') || 'Sin importaciones';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        ${imports}
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For no_findings: show badge + reason + available data
+    if (data.state === 'no_findings') {
+      const imports = data.imports?.map(dll => `
+        <details style="margin: 8px 0; padding: 8px; background: var(--bg-tertiary); border-radius: var(--radius-sm);">
+          <summary style="cursor:pointer;font-weight:600;color:var(--accent-cyan);">${escapeHtml(dll.dll)} (${dll.functions.length} funciones)</summary>
+          <table class="result-table" style="margin-top:8px;font-size:11px;">
+            <thead><tr><th>Función</th><th>Tipo</th></tr></thead>
+            <tbody>
+              ${dll.functions.map(f => `
+                <tr>
+                  <td>${escapeHtml(f.name || `ORDINAL #${f.ordinal}`)}</td>
+                  <td>${f.name ? 'Name' : 'Ordinal'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </details>
+      `).join('') || '';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${imports ? imports : '<p style="color: var(--text-muted);">No hay importaciones para mostrar</p>'}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For not_applicable: explanation + requirements
+    if (data.state === 'not_applicable') {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+          ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+          <p style="margin-top: 16px; color: var(--text-secondary);">Requiere: archivo PE válido con directorio de importaciones</p>
+          ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    // For pending/error: show state only
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px;">
         <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
         ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
-        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
       </div>
     `;
     return;
   }
 
+  // Legacy response without state field (backward compatibility)
   if (data.status === 'no_import_directory') {
     container.innerHTML = '<div class="json-viewer">Sin directorio de importaciones</div>';
     return;
@@ -680,10 +879,10 @@ function renderImports(data) {
 
   container.innerHTML = `
     <div style="margin-bottom: 16px;">
-      <span class="tag tag-${data.status === 'parsed' ? 'moderate' : 'informational'}">${data.status}</span>
+      <span class="tag tag-${data.status === 'parsed' ? 'moderate' : 'informational'}">${escapeHtml(data.status)}</span>
     </div>
     ${imports}
-    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
   `;
 }
 
@@ -721,16 +920,101 @@ function renderIndicators(data) {
     const label = stateLabels[data.state] || data.state.toUpperCase();
     const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
 
+    // For completed: show badge + full results
+    if (data.state === 'completed') {
+      const sections = data.sections?.map(s => `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${s.entropy.toFixed(4)}</td>
+          <td>${formatBytes(s.raw_size)}</td>
+        </tr>
+      `).join('') || '';
+
+      const findings = data.indicators?.map(f => `
+        <tr>
+          <td>${escapeHtml(f.section)}</td>
+          <td><span class="tag tag-${f.severity === 'review' ? 'review' : 'informational'}">${escapeHtml(f.rule)}</span></td>
+          <td>${escapeHtml(f.reason)}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="3">Sin hallazgos</td></tr>';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Entropía por Sección</h4>
+        <table class="result-table">
+          <thead><tr><th>Sección</th><th>Entropía</th><th>Tamaño</th></tr></thead>
+          <tbody>${sections}</tbody>
+        </table>
+        <h4 style="margin: 24px 0 8px; color: var(--text-secondary);">Indicadores</h4>
+        <table class="result-table">
+          <thead><tr><th>Sección</th><th>Regla</th><th>Razón</th></tr></thead>
+          <tbody>${findings}</tbody>
+        </table>
+        <div style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 12px;">
+          Veredicto: <strong style="color: var(--accent-amber);">${escapeHtml(data.verdict)}</strong> — Los indicadores son señales para revisión, no veredictos de malware.
+        </div>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For no_findings: show badge + reason + available data (sections, no indicators)
+    if (data.state === 'no_findings') {
+      const sections = data.sections?.map(s => `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${s.entropy.toFixed(4)}</td>
+          <td>${formatBytes(s.raw_size)}</td>
+        </tr>
+      `).join('') || '';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${sections ? `
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Entropía por Sección</h4>
+        <table class="result-table">
+          <thead><tr><th>Sección</th><th>Entropía</th><th>Tamaño</th></tr></thead>
+          <tbody>${sections}</tbody>
+        </table>
+        ` : ''}
+        <h4 style="margin: 24px 0 8px; color: var(--text-secondary);">Indicadores</h4>
+        <p style="color: var(--text-muted);">No se detectaron indicadores</p>
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For not_applicable: explanation + requirements
+    if (data.state === 'not_applicable') {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+          ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+          <p style="margin-top: 16px; color: var(--text-secondary);">Requiere: archivo PE válido con secciones analizables</p>
+          ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    // For pending/error: show state only
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px;">
         <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
         ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
-        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
       </div>
     `;
     return;
   }
 
+  // Legacy response without state field (backward compatibility)
   const sections = data.sections?.map(s => `
     <tr>
       <td>${escapeHtml(s.name)}</td>
@@ -742,7 +1026,7 @@ function renderIndicators(data) {
   const findings = data.indicators?.map(f => `
     <tr>
       <td>${escapeHtml(f.section)}</td>
-      <td><span class="tag tag-${f.severity === 'review' ? 'review' : 'informational'}">${f.rule}</span></td>
+      <td><span class="tag tag-${f.severity === 'review' ? 'review' : 'informational'}">${escapeHtml(f.rule)}</span></td>
       <td>${escapeHtml(f.reason)}</td>
     </tr>
   `).join('') || '<tr><td colspan="3">Sin hallazgos</td></tr>';
@@ -759,9 +1043,9 @@ function renderIndicators(data) {
       <tbody>${findings}</tbody>
     </table>
     <div style="margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-sm); color: var(--text-muted); font-size: 12px;">
-      Veredicto: <strong style="color: var(--accent-amber);">${data.verdict}</strong> — Los indicadores son señales para revisión, no veredictos de malware.
+      Veredicto: <strong style="color: var(--accent-amber);">${escapeHtml(data.verdict)}</strong> — Los indicadores son señales para revisión, no veredictos de malware.
     </div>
-    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
   `;
 }
 
@@ -795,11 +1079,75 @@ function renderArtifacts(data) {
     const label = stateLabels[exportData.state] || exportData.state.toUpperCase();
     const tagClass = exportData.state === 'error' ? 'tag-error' : exportData.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
 
+    // For completed: show badge + full results
+    if (exportData.state === 'completed') {
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Export: ${label}</span>
+        </div>
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(exportData.source_sha256 || 'N/A')}</code></td></tr>
+            <tr><td>Registros</td><td>${escapeHtml(exportData.record_count || 0)}</td></tr>
+            <tr><td>Eventos en timeline</td><td>${timeline.count || 0}</td></tr>
+          </tbody>
+        </table>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Timeline (primeros 20)</h4>
+        <div class="strings-list" style="max-height: 400px;">
+          ${timeline.events?.slice(0, 20).map(e => `
+            <div class="string-item">
+              <span class="string-offset">${escapeHtml(e.observed_time_utc)}</span>
+              <span class="string-encoding">${escapeHtml(e.source)}</span>
+              <span class="string-value">${escapeHtml(e.file_path)}</span>
+            </div>
+          `).join('') || '<div class="string-item" style="color:var(--text-muted);">Sin eventos</div>'}
+        </div>
+        ${exportData.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(exportData.reason)}</p>` : ''}
+        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        ${timeline.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Timeline)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${timeline.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For no_findings: show badge + reason + available data
+    if (exportData.state === 'no_findings') {
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Export: ${label}</span>
+        </div>
+        ${exportData.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(exportData.reason)}</p>` : ''}
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(exportData.source_sha256 || 'N/A')}</code></td></tr>
+            <tr><td>Registros</td><td>${escapeHtml(exportData.record_count || 0)}</td></tr>
+          </tbody>
+        </table>
+        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For not_applicable: explanation + requirements
+    if (exportData.state === 'not_applicable') {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Export: ${label}</span>
+          ${exportData.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(exportData.reason)}</p>` : ''}
+          <p style="margin-top: 16px; color: var(--text-secondary);">Requiere: exportación CSV válida con columnas obligatorias</p>
+          ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    // For pending/error: show state only
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px;">
         <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Export: ${label}</span>
         ${exportData.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(exportData.reason)}</p>` : ''}
-        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
       </div>
     `;
     return;
@@ -817,36 +1165,104 @@ function renderArtifacts(data) {
     const label = stateLabels[timeline.state] || timeline.state.toUpperCase();
     const tagClass = timeline.state === 'error' ? 'tag-error' : timeline.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
 
+    // For completed: show badge + full results
+    if (timeline.state === 'completed') {
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Timeline: ${label}</span>
+        </div>
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(exportData.source_sha256 || 'N/A')}</code></td></tr>
+            <tr><td>Registros</td><td>${escapeHtml(exportData.record_count || 0)}</td></tr>
+            <tr><td>Eventos en timeline</td><td>${escapeHtml(timeline.count || 0)}</td></tr>
+          </tbody>
+        </table>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Timeline (primeros 20)</h4>
+        <div class="strings-list" style="max-height: 400px;">
+          ${timeline.events?.slice(0, 20).map(e => `
+            <div class="string-item">
+              <span class="string-offset">${escapeHtml(e.observed_time_utc)}</span>
+              <span class="string-encoding">${escapeHtml(e.source)}</span>
+              <span class="string-value">${escapeHtml(e.file_path)}</span>
+            </div>
+          `).join('') || '<div class="string-item" style="color:var(--text-muted);">Sin eventos</div>'}
+        </div>
+        ${timeline.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(timeline.reason)}</p>` : ''}
+        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Export)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        ${timeline.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Timeline)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${timeline.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For no_findings: show badge + reason + available data
+    if (timeline.state === 'no_findings') {
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Timeline: ${label}</span>
+        </div>
+        ${timeline.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(timeline.reason)}</p>` : ''}
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(exportData.source_sha256 || 'N/A')}</code></td></tr>
+            <tr><td>Registros</td><td>${escapeHtml(exportData.record_count || 0)}</td></tr>
+          </tbody>
+        </table>
+        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Export)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        ${timeline.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Timeline)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${timeline.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For not_applicable: explanation + requirements
+    if (timeline.state === 'not_applicable') {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Timeline: ${label}</span>
+          ${timeline.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(timeline.reason)}</p>` : ''}
+          <p style="margin-top: 16px; color: var(--text-secondary);">Requiere: exportación con eventos para construir timeline</p>
+          ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Export)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+          ${timeline.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Timeline)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${timeline.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    // For pending/error: show state only
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px;">
         <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">Timeline: ${label}</span>
         ${timeline.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(timeline.reason)}</p>` : ''}
-        ${timeline.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${timeline.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+        ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Export)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        ${timeline.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones (Timeline)</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${timeline.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
       </div>
     `;
     return;
   }
 
+  // Legacy response without state fields
   container.innerHTML = `
     <table class="result-table">
       <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
       <tbody>
-        <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${exportData.source_sha256 || 'N/A'}</code></td></tr>
-        <tr><td>Registros</td><td>${exportData.record_count || 0}</td></tr>
-        <tr><td>Eventos en timeline</td><td>${timeline.count || 0}</td></tr>
+        <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(exportData.source_sha256 || 'N/A')}</code></td></tr>
+        <tr><td>Registros</td><td>${escapeHtml(exportData.record_count || 0)}</td></tr>
+        <tr><td>Eventos en timeline</td><td>${escapeHtml(timeline.count || 0)}</td></tr>
       </tbody>
     </table>
     <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Timeline (primeros 20)</h4>
     <div class="strings-list" style="max-height: 400px;">
       ${timeline.events?.slice(0, 20).map(e => `
         <div class="string-item">
-          <span class="string-offset">${e.observed_time_utc}</span>
+          <span class="string-offset">${escapeHtml(e.observed_time_utc)}</span>
           <span class="string-encoding">${escapeHtml(e.source)}</span>
           <span class="string-value">${escapeHtml(e.file_path)}</span>
         </div>
       `).join('') || '<div class="string-item" style="color:var(--text-muted);">Sin eventos</div>'}
     </div>
-    ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+    ${exportData.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${exportData.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
   `;
 }
 
@@ -865,23 +1281,97 @@ function renderTimeline(data) {
     const label = stateLabels[data.state] || data.state.toUpperCase();
     const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
 
+    // For completed: show badge + full results
+    if (data.state === 'completed') {
+      const correlations = data.correlations?.map(c => `
+        <tr>
+          <td>${escapeHtml(c.left_artifact)} → ${escapeHtml(c.right_artifact)}</td>
+          <td>${escapeHtml(c.match_basis)}</td>
+          <td>${escapeHtml(c.time_delta_seconds)}s</td>
+          <td><span class="tag tag-${c.confidence}">${escapeHtml(c.confidence)}</span></td>
+          <td>${escapeHtml(c.corroboration)}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="5">Sin correlaciones</td></tr>';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Ventana</td><td>${escapeHtml(data.window_seconds)}s</td></tr>
+            <tr><td>Eventos</td><td>${escapeHtml(data.events?.length || 0)}</td></tr>
+            <tr><td>Correlaciones</td><td>${escapeHtml(data.correlation_count || 0)}</td></tr>
+            <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(data.source_export_sha256 || 'N/A')}</code></td></tr>
+          </tbody>
+        </table>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Correlaciones</h4>
+        <table class="result-table">
+          <thead><tr><th>Artefactos</th><th>Base</th><th>Δ Tiempo</th><th>Confianza</th><th>Tipo</th></tr></thead>
+          <tbody>${correlations}</tbody>
+        </table>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For no_findings: show badge + reason + available data (summary table, no correlations)
+    if (data.state === 'no_findings') {
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Ventana</td><td>${escapeHtml(data.window_seconds)}s</td></tr>
+            <tr><td>Eventos</td><td>${escapeHtml(data.events?.length || 0)}</td></tr>
+            <tr><td>Correlaciones</td><td>${escapeHtml(data.correlation_count || 0)}</td></tr>
+            <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(data.source_export_sha256 || 'N/A')}</code></td></tr>
+          </tbody>
+        </table>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Correlaciones</h4>
+        <p style="color: var(--text-muted);">No se encontraron correlaciones en la ventana especificada</p>
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For not_applicable: explanation + requirements
+    if (data.state === 'not_applicable') {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+          ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+          <p style="margin-top: 16px; color: var(--text-secondary);">Requiere: exportación con eventos para correlación temporal</p>
+          ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    // For pending/error: show state only
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px;">
         <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
         ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
-        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
       </div>
     `;
     return;
   }
 
+  // Legacy response without state field
   const correlations = data.correlations?.map(c => `
     <tr>
-      <td>${c.left_artifact} → ${c.right_artifact}</td>
-      <td>${c.match_basis}</td>
-      <td>${c.time_delta_seconds}s</td>
-      <td><span class="tag tag-${c.confidence}">${c.confidence}</span></td>
-      <td>${c.corroboration}</td>
+      <td>${escapeHtml(c.left_artifact)} → ${escapeHtml(c.right_artifact)}</td>
+      <td>${escapeHtml(c.match_basis)}</td>
+      <td>${escapeHtml(c.time_delta_seconds)}s</td>
+      <td><span class="tag tag-${c.confidence}">${escapeHtml(c.confidence)}</span></td>
+      <td>${escapeHtml(c.corroboration)}</td>
     </tr>
   `).join('') || '<tr><td colspan="5">Sin correlaciones</td></tr>';
 
@@ -889,10 +1379,10 @@ function renderTimeline(data) {
     <table class="result-table">
       <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
       <tbody>
-        <tr><td>Ventana</td><td>${data.window_seconds}s</td></tr>
-        <tr><td>Eventos</td><td>${data.events?.length || 0}</td></tr>
-        <tr><td>Correlaciones</td><td>${data.correlation_count || 0}</td></tr>
-        <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${data.source_export_sha256 || 'N/A'}</code></td></tr>
+        <tr><td>Ventana</td><td>${escapeHtml(data.window_seconds)}s</td></tr>
+        <tr><td>Eventos</td><td>${escapeHtml(data.events?.length || 0)}</td></tr>
+        <tr><td>Correlaciones</td><td>${escapeHtml(data.correlation_count || 0)}</td></tr>
+        <tr><td>Export SHA-256</td><td><code style="font-size: 11px;">${escapeHtml(data.source_export_sha256 || 'N/A')}</code></td></tr>
       </tbody>
     </table>
     <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Correlaciones</h4>
@@ -900,7 +1390,7 @@ function renderTimeline(data) {
       <thead><tr><th>Artefactos</th><th>Base</th><th>Δ Tiempo</th><th>Confianza</th><th>Tipo</th></tr></thead>
       <tbody>${correlations}</tbody>
     </table>
-    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+    ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
   `;
 }
 
@@ -919,26 +1409,105 @@ function renderRegistry(data) {
     const label = stateLabels[data.state] || data.state.toUpperCase();
     const tagClass = data.state === 'error' ? 'tag-error' : data.state === 'not_applicable' ? 'tag-warning' : 'tag-informational';
 
+    // For completed: show badge + full results
+    if (data.state === 'completed') {
+      const events = data.events?.map(e => `
+        <tr>
+          <td>${escapeHtml(e.event_id)} (${escapeHtml(e.operation)})</td>
+          <td>${escapeHtml(e.timestamp_utc || 'N/A')}</td>
+          <td>${escapeHtml(e.target_object)}</td>
+          <td>${escapeHtml(e.registry_root || 'N/A')}</td>
+          <td>${e.registry_root_assumed ? '<span class="tag tag-warning">asumido</span>' : ''}</td>
+          <td>${e.possible_persistence_location ? '<span class="tag tag-review">Sí</span>' : '<span class="tag tag-informational">No</span>'}</td>
+          <td>${escapeHtml(e.matched_rules?.join(', ') || '—')}</td>
+          <td><span class="tag tag-${e.assessment === 'review' ? 'review' : 'informational'}">${escapeHtml(e.assessment)}</span></td>
+        </tr>
+      `).join('') || '<tr><td colspan="9">Sin eventos</td></tr>';
+
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Módulo</td><td>${escapeHtml(data.module)}</td></tr>
+            <tr><td>Total eventos</td><td>${escapeHtml(data.count)}</td></tr>
+            <tr><td>Para revisión</td><td>${escapeHtml(data.review_count)}</td></tr>
+            <tr><td>Monitoreo en vivo</td><td>${escapeHtml(data.live_monitoring ? 'Sí' : 'No')}</td></tr>
+          </tbody>
+        </table>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Eventos</h4>
+        <div style="overflow-x: auto;">
+          <table class="result-table">
+            <thead><tr><th>Evento</th><th>Timestamp</th><th>Target Object</th><th>Root</th><th>Asumido</th><th>Persistencia</th><th>Reglas</th><th>Assessment</th></tr></thead>
+            <tbody>${events}</tbody>
+          </table>
+        </div>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For no_findings: show badge + reason + available data (summary table, no events)
+    if (data.state === 'no_findings') {
+      container.innerHTML = `
+        <div style="margin-bottom: 16px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+        </div>
+        ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+        <table class="result-table">
+          <thead><tr><th>Campo</th><th>Valor</th></tr></thead>
+          <tbody>
+            <tr><td>Módulo</td><td>${escapeHtml(data.module)}</td></tr>
+            <tr><td>Total eventos</td><td>${escapeHtml(data.count)}</td></tr>
+            <tr><td>Para revisión</td><td>${escapeHtml(data.review_count)}</td></tr>
+            <tr><td>Monitoreo en vivo</td><td>${escapeHtml(data.live_monitoring ? 'Sí' : 'No')}</td></tr>
+          </tbody>
+        </table>
+        <h4 style="margin: 16px 0 8px; color: var(--text-secondary);">Eventos</h4>
+        <p style="color: var(--text-muted);">No hay eventos para mostrar</p>
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+      `;
+      return;
+    }
+
+    // For not_applicable: explanation + requirements
+    if (data.state === 'not_applicable') {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
+          ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
+          <p style="margin-top: 16px; color: var(--text-secondary);">Requiere: exportación Sysmon JSON normalizada con eventos de registro</p>
+          ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
+        </div>
+      `;
+      return;
+    }
+
+    // For pending/error: show state only
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 20px;">
         <span class="tag ${tagClass}" style="font-size: 14px; padding: 8px 16px;">${label}</span>
         ${data.reason ? `<p style="margin-top: 16px; color: var(--text-secondary);">${escapeHtml(data.reason)}</p>` : ''}
-        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${l}</li>`).join('')}</ul></details>` : ''}
+        ${data.limitations ? `<details style="margin-top: 16px;"><summary style="cursor:pointer;color:var(--text-secondary);">Limitaciones</summary><ul style="margin-top:8px;padding-left:20px;color:var(--text-muted);font-size:12px;">${data.limitations.map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul></details>` : ''}
       </div>
     `;
     return;
   }
 
+  // Legacy response without state field
   const events = data.events?.map(e => `
     <tr>
-      <td>${e.event_id} (${e.operation})</td>
-      <td>${e.timestamp_utc || 'N/A'}</td>
+      <td>${escapeHtml(e.event_id)} (${escapeHtml(e.operation)})</td>
+      <td>${escapeHtml(e.timestamp_utc || 'N/A')}</td>
       <td>${escapeHtml(e.target_object)}</td>
       <td>${escapeHtml(e.registry_root || 'N/A')}</td>
       <td>${e.registry_root_assumed ? '<span class="tag tag-warning">asumido</span>' : ''}</td>
       <td>${e.possible_persistence_location ? '<span class="tag tag-review">Sí</span>' : '<span class="tag tag-informational">No</span>'}</td>
       <td>${escapeHtml(e.matched_rules?.join(', ') || '—')}</td>
-      <td><span class="tag tag-${e.assessment === 'review' ? 'review' : 'informational'}">${e.assessment}</span></td>
+      <td><span class="tag tag-${e.assessment === 'review' ? 'review' : 'informational'}">${escapeHtml(e.assessment)}</span></td>
     </tr>
   `).join('') || '<tr><td colspan="9">Sin eventos</td></tr>';
 
@@ -1015,6 +1584,9 @@ async function handleFileSelect(file) {
     if (!response.ok) {
       throw new Error(data.detail || 'Error al subir archivo');
     }
+
+    // Reset module tracking for new file
+    resetModuleTracking();
 
     state.currentFile = {...data, id: data.file_id};
     state.custodyRecordId = null;
@@ -1146,8 +1718,56 @@ function setupEventListeners() {
 
 // ─── Dashboard Stats ───
 function updateDashboardStats() {
-  // This would be updated based on actual analysis results
   document.getElementById('stat-files').textContent = state.currentFile ? '1' : '0';
+
+  // Count modules completed for current file (sum of all Sets in the Map)
+  let completedModules = 0;
+  if (state.completedModules && state.currentFile) {
+    const fileModules = state.completedModules.get(state.currentFile.id);
+    if (fileModules) {
+      completedModules = fileModules.size;
+    }
+  }
+  document.getElementById('stat-modules').textContent = completedModules;
+
+  // Count reports generated (tracked separately)
+  const reportsGenerated = state.reportsGenerated || 0;
+  document.getElementById('stat-reports').textContent = reportsGenerated;
+
+  // Count indicators with severity 'review'
+  let indicatorsReview = 0;
+  if (state.lastIndicatorsData?.indicators) {
+    indicatorsReview = state.lastIndicatorsData.indicators.filter(i => i.severity === 'review').length;
+  }
+  document.getElementById('stat-indicators').textContent = indicatorsReview;
+}
+
+// Track completed modules per file
+function markModuleCompleted(moduleName) {
+  if (!state.currentFile) return;
+
+  if (!state.completedModules) {
+    state.completedModules = new Map();
+  }
+
+  const fileKey = state.currentFile.id;
+  if (!state.completedModules.has(fileKey)) {
+    state.completedModules.set(fileKey, new Set());
+  }
+
+  const modules = state.completedModules.get(fileKey);
+  if (!modules.has(moduleName)) {
+    modules.add(moduleName);
+    updateDashboardStats();
+  }
+}
+
+// Reset module tracking when file changes
+function resetModuleTracking() {
+  state.completedModules = new Map();
+  state.reportsGenerated = 0;
+  state.lastIndicatorsData = null;
+  updateDashboardStats();
 }
 
 // ─── Health Check ───
