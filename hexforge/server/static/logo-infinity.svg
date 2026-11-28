@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="neon" x1="0" x2="1">
+      <stop stop-color="#27e8ff"/>
+      <stop offset=".5" stop-color="#4a87ff"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+  </defs>
+  <!-- Infinity symbol: correctly scaled from original banner (1200x320) -->
+  <!-- Original: M80 160 C140 65 215 65 300 160 S460 255 520 160 C460 65 385 65 300 160 S140 255 80 160 -->
+  <!-- BBox: x∈[80,520] y∈[65,255] → w=440 h=190 center=(300,160) -->
+  <!-- Scale to 80% of 100×100: scale=80/440=2/11≈0.1818, centered at (50,50) -->
+  <path d="M10 50
+    C20.91 32.73 34.55 32.73 50 50
+    S79.09 67.27 90 50
+    C79.09 32.73 65.45 32.73 50 50
+    S20.91 67.27 10 50"
+    fill="none"
+    stroke="url(#neon)"
+    stroke-width="5"
+    stroke-linecap="round"
+    opacity="0.8"
+    filter="url(#glow)"/>
+  <path d="M10 50
+    C20.91 32.73 34.55 32.73 50 50
+    S79.09 67.27 90 50
+    C79.09 32.73 65.45 32.73 50 50
+    S20.91 67.27 10 50"
+    fill="none"
+    stroke="url(#neon)"
+    stroke-width="2.5"
+    stroke-linecap="round"/>
+</svg>

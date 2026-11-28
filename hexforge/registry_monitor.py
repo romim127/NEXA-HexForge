@@ -26,6 +26,12 @@ REGISTRY_ROOTS = {
     "hkey_current_config", "hkcc",
 }
 
+class RegistryMonitorError(ValueError):
+    """Error durante el monitoreo de registro con código de estado."""
+    def __init__(self, message: str, state: str = "error"):
+        super().__init__(message)
+        self.state = state
+
 def _split_registry_path(path: str) -> tuple[list[str], str]:
     """Split registry path into normalized components, extracting root hive.
 
@@ -84,13 +90,14 @@ def _matches_persistence_pattern(path_components: list[str], pattern_components:
 
 def classify_registry_event(event: dict) -> dict:
     """Classify an already-normalized event, preserving source uncertainty."""
-    if not isinstance(event, dict): raise ValueError("El evento debe ser un objeto JSON.")
+    if not isinstance(event, dict):
+        raise RegistryMonitorError("El evento debe ser un objeto JSON.", state="error")
     event_id = event.get("event_id")
     if type(event_id) is not int or event_id not in EVENTS:
-        raise ValueError("Solo eventos Sysmon 12, 13 y 14.")
+        raise RegistryMonitorError("Solo eventos Sysmon 12, 13 y 14.", state="error")
     target = event.get("target_object", "")
     if not isinstance(target, str) or not target.strip() or len(target) > 8192:
-        raise ValueError("target_object inválido.")
+        raise RegistryMonitorError("target_object inválido.", state="error")
 
     try:
         path_components, root_hive = _split_registry_path(target)
@@ -170,11 +177,42 @@ def classify_registry_event(event: dict) -> dict:
 def analyze_export(path: str | Path) -> dict:
     """Read bounded JSON array of normalized Sysmon records without modifying evidence."""
     source = validate_file_path(path, must_exist=True, max_size=8 * 1024 * 1024, purpose="registry export")
-    data = json.loads(source.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(source.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RegistryMonitorError("Archivo de exportación no es JSON válido.", state="error") from exc
     if not isinstance(data, list) or len(data) > 10000:
-        raise ValueError("Se requiere una lista de hasta 10000 eventos.")
-    results = [classify_registry_event(event) for event in data]
-    return {"module": "Registry & Persistence Monitor — offline MVP",
-            "events": results, "count": len(results),
-            "review_count": sum(e["assessment"] == "review" for e in results),
-            "live_monitoring": False, "execution_performed": False}
+        raise RegistryMonitorError("Se requiere una lista de hasta 10000 eventos.", state="error")
+
+    results = []
+    for event in data:
+        try:
+            results.append(classify_registry_event(event))
+        except RegistryMonitorError as exc:
+            # Include individual event errors in results
+            results.append({
+                "event_id": event.get("event_id"),
+                "operation": EVENTS.get(event.get("event_id"), "unknown"),
+                "timestamp_utc": event.get("timestamp_utc"),
+                "target_object": event.get("target_object"),
+                "state": exc.state,
+                "reason": str(exc),
+            })
+
+    state = "completed"
+    reason = None
+    if not data:
+        reason = "Exportación válida sin eventos."
+    elif not results:
+        reason = "Exportación procesada sin eventos válidos."
+
+    return {
+        "state": state,
+        "module": "Registry & Persistence Monitor — offline MVP",
+        "events": results,
+        "count": len(results),
+        "review_count": sum(e.get("assessment") == "review" for e in results),
+        "reason": reason,
+        "live_monitoring": False,
+        "execution_performed": False,
+    }

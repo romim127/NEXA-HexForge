@@ -3,7 +3,36 @@ name = "nexa-hexforge"
 version = "0.1.0"
 description = "Read-only binary intelligence and forensic inspection core"
 requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.109",
+    "uvicorn[standard]>=0.27",
+    "python-multipart>=0.0.6",
+]
+
+[project.scripts]
+hexforge = "hexforge.__main__:main"
+hexforge-console = "hexforge.server_cli:main"
+hexforge-artifact = "hexforge.artifact_cli:main"
+hexforge-timeline = "hexforge.timeline_cli:main"
+hexforge-custody = "hexforge.custody_cli:main"
+hexforge-registry = "hexforge.registry_monitor_cli:main"
+hexforge-academy = "hexforge.academy_cli:main"
+hexforge-byte = "hexforge.byte_academy_cli:main"
+hexforge-pe = "hexforge.pe_academy_cli:main"
+hexforge-entropy = "hexforge.entropy_academy_cli:main"
+hexforge-import = "hexforge.import_academy_cli:main"
+hexforge-rva = "hexforge.rva_academy_cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["hexforge*"]
+exclude = ["tests*", "web*", "assets*", "docs*"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+]
