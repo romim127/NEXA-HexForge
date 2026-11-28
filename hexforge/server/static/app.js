@@ -88,6 +88,46 @@ function addActivity(module, action, detail = '') {
   renderActivity();
 }
 
+/**
+ * Formatea una entrada de actividad basada en el estado real del backend.
+ * Respeta los cinco estados: completed, no_findings, not_applicable, pending, error.
+ * @param {string} module - Nombre del módulo para el registro
+ * @param {object} data - Respuesta del backend
+ * @param {object} [detailOverrides] - Sobrescrituras opcionales para detalles específicos del módulo
+ */
+function formatActivity(module, data, detailOverrides = {}) {
+  const stateLabels = {
+    'pending': 'Pendiente',
+    'not_applicable': 'No aplicable',
+    'no_findings': 'Sin hallazgos',
+    'completed': 'Completado',
+    'error': 'Error',
+  };
+
+  const state = data.state || (data.status === 'no_import_directory' ? 'not_applicable' : 'completed');
+  const action = stateLabels[state] || 'Desconocido';
+
+  let detail = '';
+
+  if (state === 'completed') {
+    // Usar sobrescrituras si existen, sino construir desde data
+    if (detailOverrides.completed) {
+      detail = detailOverrides.completed(data);
+    }
+  } else if (state === 'no_findings') {
+    // Mostrar razón del backend si existe
+    detail = data.reason ? escapeHtml(data.reason) : (detailOverrides.no_findings ? detailOverrides.no_findings(data) : '');
+  } else if (state === 'not_applicable') {
+    // Mostrar razón del backend (requisitos)
+    detail = data.reason ? escapeHtml(data.reason) : (detailOverrides.not_applicable ? detailOverrides.not_applicable(data) : '');
+  } else if (state === 'error') {
+    detail = data.reason ? escapeHtml(data.reason) : 'Error en el análisis';
+  }
+  // pending: sin detalle adicional
+
+  return { action, detail };
+}
+
 function renderActivity() {
   const container = document.getElementById('recent-activity');
   if (state.recentActivity.length === 0) {
@@ -172,7 +212,10 @@ const moduleHandlers = {
         if (!data.state || data.state === 'completed') {
           markModuleCompleted('Inspector');
         }
-        addActivity('Inspector', 'Completado', `${formatBytes(data.size_bytes)} • ${escapeHtml(data.file_signature)}`);
+        const { action, detail } = formatActivity('Inspector', data, {
+          completed: d => `${formatBytes(d.size_bytes)} • ${escapeHtml(d.file_signature)}`,
+        });
+        addActivity('Inspector', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -195,7 +238,10 @@ const moduleHandlers = {
         if (!data.state || data.state === 'completed') {
           markModuleCompleted('PE');
         }
-        addActivity('PE', 'Completado', `${data.format} • ${data.section_count} secciones`);
+        const { action, detail } = formatActivity('PE', data, {
+          completed: d => `${escapeHtml(d.format)} • ${d.section_count} secciones`,
+        });
+        addActivity('PE', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -218,8 +264,13 @@ const moduleHandlers = {
         if (!data.state || data.state === 'completed') {
           markModuleCompleted('Imports');
         }
-        const fnCount = data.imports?.reduce((sum, dll) => sum + dll.functions.length, 0) || 0;
-        addActivity('Imports', 'Completado', `${data.imports?.length || 0} DLLs • ${fnCount} funciones`);
+        const { action, detail } = formatActivity('Imports', data, {
+          completed: d => {
+            const fnCount = d.imports?.reduce((sum, dll) => sum + dll.functions.length, 0) || 0;
+            return `${d.imports?.length || 0} DLLs • ${fnCount} funciones`;
+          },
+        });
+        addActivity('Imports', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -246,7 +297,10 @@ const moduleHandlers = {
         if (!data.state || data.state === 'completed') {
           markModuleCompleted('Strings');
         }
-        addActivity('Strings', 'Completado', `${data.strings?.length || 0} cadenas`);
+        const { action, detail } = formatActivity('Strings', data, {
+          completed: d => `${d.strings?.length || 0} cadenas`,
+        });
+        addActivity('Strings', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -271,8 +325,13 @@ const moduleHandlers = {
           // Store for dashboard stats
           state.lastIndicatorsData = data;
         }
-        const reviewCount = data.indicators?.filter(i => i.severity === 'review').length || 0;
-        addActivity('Indicators', 'Completado', `${reviewCount} para revisión`);
+        const { action, detail } = formatActivity('Indicators', data, {
+          completed: d => {
+            const reviewCount = d.indicators?.filter(i => i.severity === 'review').length || 0;
+            return `${reviewCount} para revisión`;
+          },
+        });
+        addActivity('Indicators', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -319,7 +378,10 @@ const moduleHandlers = {
         if ((!exportState || exportState === 'completed') && (!data.timeline?.state || data.timeline.state === 'completed')) {
           markModuleCompleted('Artifacts (C1)');
         }
-        addActivity('Artifacts (C1)', 'Completado', `${data.timeline?.count || 0} eventos`);
+        const { action, detail } = formatActivity('Artifacts (C1)', data.export || data, {
+          completed: d => `${d.count || d.timeline?.count || 0} eventos`,
+        });
+        addActivity('Artifacts (C1)', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -343,7 +405,10 @@ const moduleHandlers = {
         if (!data.state || data.state === 'completed') {
           markModuleCompleted('Timeline (C2)');
         }
-        addActivity('Timeline (C2)', 'Completado', `${data.correlation_count || 0} correlaciones`);
+        const { action, detail } = formatActivity('Timeline (C2)', data, {
+          completed: d => `${d.correlation_count || 0} correlaciones`,
+        });
+        addActivity('Timeline (C2)', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -368,7 +433,10 @@ const moduleHandlers = {
         state.custodyRecordId = data.record_id;
         document.getElementById('custody-register-result').innerHTML = renderJson(data);
         showToast('Evidencia registrada correctamente', 'success');
-        addActivity('Custody (C3)', 'Registrado', data.evidence_id);
+        const { action, detail } = formatActivity('Custody (C3)', data, {
+          completed: d => d.evidence_id,
+        });
+        addActivity('Custody (C3)', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -385,7 +453,7 @@ const moduleHandlers = {
         });
         document.getElementById('custody-append-result').innerHTML = renderJson(data);
         showToast('Evento añadido a la cadena', 'success');
-        addActivity('Custody (C3)', 'Evento añadido', formData.action);
+        addActivity('Custody (C3)', 'Evento añadido', escapeHtml(formData.action));
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -406,7 +474,10 @@ const moduleHandlers = {
         document.getElementById('custody-verify-result').innerHTML = renderJson(data);
         const match = data.evidence_hash_matches ? '✓ Coincide' : '✗ No coincide';
         showToast(`Verificación: ${match}`, data.evidence_hash_matches ? 'success' : 'error');
-        addActivity('Custody (C3)', 'Verificado', match);
+        const { action, detail } = formatActivity('Custody (C3)', data, {
+          completed: () => match,
+        });
+        addActivity('Custody (C3)', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
@@ -429,7 +500,10 @@ const moduleHandlers = {
         if (!data.state || data.state === 'completed') {
           markModuleCompleted('Registry');
         }
-        addActivity('Registry', 'Completado', `${data.review_count || 0} para revisión de ${data.count || 0}`);
+        const { action, detail } = formatActivity('Registry', data, {
+          completed: d => `${d.review_count || 0} para revisión de ${d.count || 0}`,
+        });
+        addActivity('Registry', action, detail);
       } catch (error) {
         showToast(error.message, 'error');
       } finally {
